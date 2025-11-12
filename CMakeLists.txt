@@ -3,11 +3,14 @@ project(RoH)
 
 set(CMAKE_CXX_STANDARD 17)
 
-# Указываем путь к SFML вручную
-set(SFML_DIR "C:/SFML-2.6.1/lib/cmake/SFML")
-find_package(SFML 2.6.1 REQUIRED COMPONENTS graphics window system)
+# Указываем путь к SFML
+set(SFML_ROOT "C:/SFML-2.6.1")
 
-# Включение директорий
+# Добавляем пути для поиска заголовков
+include_directories("${SFML_ROOT}/include")
+link_directories("${SFML_ROOT}/lib")
+
+# Включение директорий проекта
 include_directories(src)
 
 # Сборка исполняемого файла
@@ -28,48 +31,23 @@ add_executable(game
     src/resource_manager/TextureNames.h
 )
 
-# Связывание с SFML
-target_link_libraries(game sfml-graphics sfml-window sfml-system)
+# Статическая линковка SFML библиотек
+target_link_libraries(game 
+    "${SFML_ROOT}/lib/sfml-graphics-s.lib"
+    "${SFML_ROOT}/lib/sfml-window-s.lib"
+    "${SFML_ROOT}/lib/sfml-system-s.lib"
+    opengl32
+    freetype
+    winmm
+    gdi32
+)
 
-# Копирование DLL файлов SFML (для Windows)
-if(WIN32)
-    # Копируем все необходимые DLL
-    get_target_property(SFML_LIB_DIR sfml-graphics LOCATION)
-    get_filename_component(SFML_LIB_DIR ${SFML_LIB_DIR} DIRECTORY)
-    
-    add_custom_command(TARGET game POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${SFML_LIB_DIR}/../bin/sfml-graphics-d-2.dll"
-        $<TARGET_FILE_DIR:game>
-    )
-    add_custom_command(TARGET game POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${SFML_LIB_DIR}/../bin/sfml-window-d-2.dll"
-        $<TARGET_FILE_DIR:game>
-    )
-    add_custom_command(TARGET game POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${SFML_LIB_DIR}/../bin/sfml-system-d-2.dll"
-        $<TARGET_FILE_DIR:game>
-    )
-endif()
+# Определение для статической линковки
+target_compile_definitions(game PRIVATE SFML_STATIC)
 
-# Копирование ресурсов в выходную директорию
-if(WIN32)
-    add_custom_command(TARGET game POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
+# Копирование ресурсов
+add_custom_command(TARGET game POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/resources"
-        $<TARGET_FILE_DIR:game>/resources
-    )
-else()
-    # Для Linux/Mac
-    add_custom_command(TARGET game POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory
-        $<TARGET_FILE_DIR:game>/resources
-    )
-    add_custom_command(TARGET game POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/resources/textures"
-        $<TARGET_FILE_DIR:game>/resources/textures
-    )
-endif()
+        "$<TARGET_FILE_DIR:game>/resources"
+)

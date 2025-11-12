@@ -1,6 +1,7 @@
 #include "Renderer.h"
 #include <cmath>
 #include <iostream>
+#include <algorithm>
 #include "resource_manager/ResourceManager.h"
 #include "resource_manager/TextureNames.h"
 
@@ -8,6 +9,7 @@ Renderer::Renderer(sf::RenderWindow& window)
     : window_(window) {
     
     if (renderTexture_.create(RENDER_WIDTH, RENDER_HEIGHT)) {
+        renderTexture_.setSmooth(false);
         renderSprite_.setTexture(renderTexture_.getTexture());
         updateRenderSpriteScale();
         renderSprite_.setTextureRect(sf::IntRect(0, 0, RENDER_WIDTH, RENDER_HEIGHT));
@@ -69,7 +71,7 @@ void Renderer::renderFrame(const PlayerState& player, const std::vector<std::vec
         if (drawEnd >= RENDER_HEIGHT) drawEnd = RENDER_HEIGHT - 1;
         
         if (useTextures_) {
-            drawTexturedWallStrip(x, drawStart, drawEnd, hit, player);
+            drawTexturedWallStrip(x, drawStart, drawEnd, hit, lineHeight);
         } else {
             drawWallStrip(x, drawStart, drawEnd, hit.side, hit.distance);
         }
@@ -80,20 +82,11 @@ void Renderer::renderFrame(const PlayerState& player, const std::vector<std::vec
     window_.draw(renderSprite_);
 }
 
-void Renderer::drawTexturedWallStrip(int x, int drawStart, int drawEnd, const RayHit& hit, const PlayerState& player) {
-    int lineHeight = drawEnd - drawStart;
+void Renderer::drawTexturedWallStrip(int x, int drawStart, int drawEnd, const RayHit& hit, int lineHeight) {
     if (lineHeight <= 0) return;
     
-    // Правильное вычисление координаты текстуры по X
-    float wallX;
-    if (hit.side == 0) {
-        wallX = player.position.y + hit.distance * hit.rayDirY;
-    } else {
-        wallX = player.position.x + hit.distance * hit.rayDirX;
-    }
-    wallX -= std::floor(wallX);
-    
-    int texX = static_cast<int>(wallX * wallTextureImage_.getSize().x);
+    // Вычисление координаты текстуры по X
+    int texX = static_cast<int>(hit.wallX * static_cast<float>(wallTextureImage_.getSize().x));
     
     // Корректировка для предотвращения зеркального отображения
     if ((hit.side == 0 && hit.rayDirX > 0) || (hit.side == 1 && hit.rayDirY < 0)) {
@@ -103,43 +96,33 @@ void Renderer::drawTexturedWallStrip(int x, int drawStart, int drawEnd, const Ra
     // Обеспечиваем, чтобы texX был в пределах текстуры
     texX = std::max(0, std::min(texX, static_cast<int>(wallTextureImage_.getSize().x) - 1));
     
-    // Создаем VertexArray для всей линии
-    sf::VertexArray vertices(sf::Points, lineHeight);
+    // Правильное вычисление шага текстуры по Y
+    float step = static_cast<float>(wallTextureImage_.getSize().y) / static_cast<float>(lineHeight);
+    float texPos = (static_cast<float>(drawStart) - RENDER_HEIGHT / 2.0f + static_cast<float>(lineHeight) / 2.0f) * step;
     
-    float step = static_cast<float>(wallTextureImage_.getSize().y) / lineHeight;
-    float texPos = (drawStart - RENDER_HEIGHT / 2.0f + lineHeight / 2.0f) * step;
+    // Применяем затемнение в зависимости от расстояния и стороны
+    float brightness = std::min(1.0f, 8.0f / hit.distance);
+    if (hit.side == 1) {
+        brightness *= 0.8f; // Более темный цвет для Y-сторон
+    }
     
-    for (int i = 0; i < lineHeight; ++i) {
-        int y = drawStart + i;
-        int texY = static_cast<int>(texPos);
-        
-        // Корректное ограничение координаты текстуры
-        if (texY < 0) texY = 0;
-        if (texY >= static_cast<int>(wallTextureImage_.getSize().y)) 
-            texY = wallTextureImage_.getSize().y - 1;
-        
-        texPos += step;
+    for (int y = drawStart; y < drawEnd; ++y) {
+        int texY = static_cast<int>(texPos) % wallTextureImage_.getSize().y;
+        texY = std::max(0, std::min(texY, static_cast<int>(wallTextureImage_.getSize().y) - 1));
         
         sf::Color pixelColor = wallTextureImage_.getPixel(texX, texY);
         
-        // Затемнение для сторон Y для создания эффекта глубины
-        if (hit.side == 1) {
-            pixelColor.r = static_cast<sf::Uint8>(pixelColor.r * 0.7f);
-            pixelColor.g = static_cast<sf::Uint8>(pixelColor.g * 0.7f);
-            pixelColor.b = static_cast<sf::Uint8>(pixelColor.b * 0.7f);
-        }
+        // Применяем затемнение
+        pixelColor.r = static_cast<sf::Uint8>(static_cast<float>(pixelColor.r) * brightness);
+        pixelColor.g = static_cast<sf::Uint8>(static_cast<float>(pixelColor.g) * brightness);
+        pixelColor.b = static_cast<sf::Uint8>(static_cast<float>(pixelColor.b) * brightness);
         
-        // Дополнительное затемнение в зависимости от расстояния
-        float brightness = std::min(1.0f, 8.0f / hit.distance);
-        pixelColor.r = static_cast<sf::Uint8>(pixelColor.r * brightness);
-        pixelColor.g = static_cast<sf::Uint8>(pixelColor.g * brightness);
-        pixelColor.b = static_cast<sf::Uint8>(pixelColor.b * brightness);
+        // Рисуем один пиксель
+        sf::Vertex pixel(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)), pixelColor);
+        renderTexture_.draw(&pixel, 1, sf::Points);
         
-        vertices[i].position = sf::Vector2f(static_cast<float>(x), static_cast<float>(y));
-        vertices[i].color = pixelColor;
+        texPos += step;
     }
-    
-    renderTexture_.draw(vertices);
 }
 
 void Renderer::drawTexturedFloorAndCeiling(const PlayerState& player, const std::vector<std::vector<int>>& map,
@@ -156,54 +139,62 @@ void Renderer::drawTexturedFloorAndCeiling(const PlayerState& player, const std:
         int p = y - RENDER_HEIGHT / 2;
         
         // Вертикальная позиция камеры
-        float posZ = 0.5f * RENDER_HEIGHT;
+        float posZ = 0.5f * static_cast<float>(RENDER_HEIGHT);
         
         // Горизонтальное расстояние от камеры к полу для текущего ряда
-        float rowDistance = posZ / p;
+        float rowDistance = posZ / static_cast<float>(p);
         
         // Вычисляем реальные шаги
-        float floorStepX = rowDistance * (rayDirX1 - rayDirX0) / RENDER_WIDTH;
-        float floorStepY = rowDistance * (rayDirY1 - rayDirY0) / RENDER_WIDTH;
+        float floorStepX = rowDistance * (rayDirX1 - rayDirX0) / static_cast<float>(RENDER_WIDTH);
+        float floorStepY = rowDistance * (rayDirY1 - rayDirY0) / static_cast<float>(RENDER_WIDTH);
         
         // Реальная координата пола
         float floorX = player.position.x + rowDistance * rayDirX0;
         float floorY = player.position.y + rowDistance * rayDirY0;
         
         for (int x = 0; x < RENDER_WIDTH; ++x) {
-            // Координаты текстуры - ИСПРАВЛЕНО: убрана битовая операция
-            int tx = static_cast<int>(floorTextureImage_.getSize().x * (floorX - std::floor(floorX)));
-            int ty = static_cast<int>(floorTextureImage_.getSize().y * (floorY - std::floor(floorY)));
+            // Координаты текстуры для пола - ИНВЕРТИРУЕМ по X чтобы исправить отзеркаливание
+            int floorTexX = static_cast<int>(static_cast<float>(floorTextureImage_.getSize().x) * (1.0f - (floorX - std::floor(floorX))));
+            int floorTexY = static_cast<int>(static_cast<float>(floorTextureImage_.getSize().y) * (floorY - std::floor(floorY)));
             
             // Ограничиваем координаты текстуры
-            tx = std::max(0, std::min(tx, static_cast<int>(floorTextureImage_.getSize().x) - 1));
-            ty = std::max(0, std::min(ty, static_cast<int>(floorTextureImage_.getSize().y) - 1));
-            
-            floorX += floorStepX;
-            floorY += floorStepY;
+            floorTexX = std::max(0, std::min(floorTexX, static_cast<int>(floorTextureImage_.getSize().x) - 1));
+            floorTexY = std::max(0, std::min(floorTexY, static_cast<int>(floorTextureImage_.getSize().y) - 1));
             
             // Цвет пола
-            sf::Color floorColor = floorTextureImage_.getPixel(tx, ty);
+            sf::Color floorColor = floorTextureImage_.getPixel(floorTexX, floorTexY);
             float floorBrightness = std::min(1.0f, 3.0f / rowDistance);
-            floorColor.r = static_cast<sf::Uint8>(floorColor.r * floorBrightness);
-            floorColor.g = static_cast<sf::Uint8>(floorColor.g * floorBrightness);
-            floorColor.b = static_cast<sf::Uint8>(floorColor.b * floorBrightness);
+            floorColor.r = static_cast<sf::Uint8>(static_cast<float>(floorColor.r) * floorBrightness);
+            floorColor.g = static_cast<sf::Uint8>(static_cast<float>(floorColor.g) * floorBrightness);
+            floorColor.b = static_cast<sf::Uint8>(static_cast<float>(floorColor.b) * floorBrightness);
             
             // Отрисовка пикселя пола
             sf::Vertex floorPixel(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)), floorColor);
             renderTexture_.draw(&floorPixel, 1, sf::Points);
             
-            // Симметрично рендерим потолок
+            // Симметрично рендерим потолок с отдельной текстурой
             int ceilingY = RENDER_HEIGHT - y - 1;
             if (ceilingY >= 0) {
-                sf::Color ceilingColor = ceilingTextureImage_.getPixel(tx, ty);
+                // Координаты текстуры для потолка (используем отдельную текстуру)
+                int ceilingTexX = static_cast<int>(static_cast<float>(ceilingTextureImage_.getSize().x) * (floorX - std::floor(floorX)));
+                int ceilingTexY = static_cast<int>(static_cast<float>(ceilingTextureImage_.getSize().y) * (floorY - std::floor(floorY)));
+                
+                // Ограничиваем координаты текстуры
+                ceilingTexX = std::max(0, std::min(ceilingTexX, static_cast<int>(ceilingTextureImage_.getSize().x) - 1));
+                ceilingTexY = std::max(0, std::min(ceilingTexY, static_cast<int>(ceilingTextureImage_.getSize().y) - 1));
+                
+                sf::Color ceilingColor = ceilingTextureImage_.getPixel(ceilingTexX, ceilingTexY);
                 float ceilingBrightness = std::min(1.0f, 2.0f / rowDistance);
-                ceilingColor.r = static_cast<sf::Uint8>(ceilingColor.r * ceilingBrightness);
-                ceilingColor.g = static_cast<sf::Uint8>(ceilingColor.g * ceilingBrightness);
-                ceilingColor.b = static_cast<sf::Uint8>(ceilingColor.b * ceilingBrightness);
+                ceilingColor.r = static_cast<sf::Uint8>(static_cast<float>(ceilingColor.r) * ceilingBrightness);
+                ceilingColor.g = static_cast<sf::Uint8>(static_cast<float>(ceilingColor.g) * ceilingBrightness);
+                ceilingColor.b = static_cast<sf::Uint8>(static_cast<float>(ceilingColor.b) * ceilingBrightness);
                 
                 sf::Vertex ceilingPixel(sf::Vector2f(static_cast<float>(x), static_cast<float>(ceilingY)), ceilingColor);
                 renderTexture_.draw(&ceilingPixel, 1, sf::Points);
             }
+            
+            floorX += floorStepX;
+            floorY += floorStepY;
         }
     }
 }
@@ -230,14 +221,14 @@ void Renderer::drawSolidFloorAndCeiling() {
 
 void Renderer::updateRenderSpriteScale() {
     sf::Vector2u windowSize = window_.getSize();
-    float scaleX = static_cast<float>(windowSize.x) / RENDER_WIDTH;
-    float scaleY = static_cast<float>(windowSize.y) / RENDER_HEIGHT;
+    float scaleX = static_cast<float>(windowSize.x) / static_cast<float>(RENDER_WIDTH);
+    float scaleY = static_cast<float>(windowSize.y) / static_cast<float>(RENDER_HEIGHT);
     float scale = std::min(scaleX, scaleY);
     
     renderSprite_.setScale(scale, scale);
     
-    float offsetX = (windowSize.x - RENDER_WIDTH * scale) / 2.0f;
-    float offsetY = (windowSize.y - RENDER_HEIGHT * scale) / 2.0f;
+    float offsetX = (static_cast<float>(windowSize.x) - static_cast<float>(RENDER_WIDTH) * scale) / 2.0f;
+    float offsetY = (static_cast<float>(windowSize.y) - static_cast<float>(RENDER_HEIGHT) * scale) / 2.0f;
     renderSprite_.setPosition(offsetX, offsetY);
 }
 
@@ -250,9 +241,9 @@ void Renderer::drawWallStrip(int x, int drawStart, int drawEnd, int side, float 
     }
     
     float brightness = std::min(1.0f, 5.0f / distance);
-    wallColor.r = static_cast<sf::Uint8>(wallColor.r * brightness);
-    wallColor.g = static_cast<sf::Uint8>(wallColor.g * brightness);
-    wallColor.b = static_cast<sf::Uint8>(wallColor.b * brightness);
+    wallColor.r = static_cast<sf::Uint8>(static_cast<float>(wallColor.r) * brightness);
+    wallColor.g = static_cast<sf::Uint8>(static_cast<float>(wallColor.g) * brightness);
+    wallColor.b = static_cast<sf::Uint8>(static_cast<float>(wallColor.b) * brightness);
     
     sf::Vertex line[] = {
         sf::Vertex(sf::Vector2f(static_cast<float>(x), static_cast<float>(drawStart)), wallColor),
