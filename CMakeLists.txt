@@ -13,10 +13,16 @@ include_directories(src)
 # Сборка исполняемого файла
 add_executable(game
     src/main.cpp
+    src/game/game/Game.cpp
+    src/game/game/Game.h
     src/input_handler/InputHandler.cpp
+    src/input_handler/InputHandler.h
     src/engine/raycasting/RayCaster.cpp
+    src/engine/raycasting/RayCaster.h
     src/engine/renderer/Renderer.cpp
+    src/engine/renderer/Renderer.h
     src/engine/geographer/MapLoader.cpp
+    src/engine/geographer/MapLoader.h
 )
 
 # Связывание с SFML

@@ -1,6 +1,6 @@
 #pragma once
 #include <SFML/Graphics.hpp>
-#include "engine/raycasting/RayCaster.h"
+#include "../raycasting/RayCaster.h"
 
 class Renderer {
 public:
@@ -14,6 +14,11 @@ private:
     void drawWallStrip(int x, int lineHeight, int side, float wallX);
     void drawFloorAndCeiling(int x, int drawStart, int drawEnd);
     
-    const int SCREEN_WIDTH = 800;
-    const int SCREEN_HEIGHT = 600;
+    const int RENDER_WIDTH = 320;
+    const int RENDER_HEIGHT = 200;
+    
+    sf::RenderTexture renderTexture_;
+    sf::Sprite renderSprite_;
+    
+    void updateRenderSpriteScale();
 };

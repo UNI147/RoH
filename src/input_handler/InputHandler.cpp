@@ -6,75 +6,81 @@ void InputHandler::handleInput(PlayerState& player, float deltaTime,
     // Сохраняем старую позицию для отката при коллизии
     sf::Vector2f oldPosition = player.position;
     
-    // Движение вперед/назад
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) {
+    float currentMoveSpeed = getCurrentMoveSpeed() * deltaTime;
+    float currentRotationSpeed = ROTATION_SPEED * deltaTime;
+    
+    // Движение вперед (Стрелка вверх/W)
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up) || sf::Keyboard::isKeyPressed(sf::Keyboard::W)) {
         sf::Vector2f newPos = player.position;
-        newPos.x += player.direction.x * MOVE_SPEED * deltaTime;
-        newPos.y += player.direction.y * MOVE_SPEED * deltaTime;
+        newPos.x += player.direction.x * currentMoveSpeed;
+        newPos.y += player.direction.y * currentMoveSpeed;
         
         if (canMoveTo(player, newPos, map)) {
             player.position = newPos;
         }
     }
     
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) {
+    // Движение назад (Стрелка вниз/S)
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down) || sf::Keyboard::isKeyPressed(sf::Keyboard::S)) {
         sf::Vector2f newPos = player.position;
-        newPos.x -= player.direction.x * MOVE_SPEED * deltaTime;
-        newPos.y -= player.direction.y * MOVE_SPEED * deltaTime;
+        newPos.x -= player.direction.x * currentMoveSpeed;
+        newPos.y -= player.direction.y * currentMoveSpeed;
         
         if (canMoveTo(player, newPos, map)) {
             player.position = newPos;
         }
     }
     
-    // Стрэйф влево/вправо
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) {
+    // Стрэйф влево (Запятая/A)
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Comma) || sf::Keyboard::isKeyPressed(sf::Keyboard::A)) {
         sf::Vector2f newPos = player.position;
-        newPos.x += player.direction.y * MOVE_SPEED * deltaTime;
-        newPos.y -= player.direction.x * MOVE_SPEED * deltaTime;
+        newPos.x -= player.direction.y * currentMoveSpeed;
+        newPos.y += player.direction.x * currentMoveSpeed;
+        
+        if (canMoveTo(player, newPos, map)) {
+            player.position = newPos;
+        }
+    }
+
+    // Стрэйф вправо (Точка/D)
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Period) || sf::Keyboard::isKeyPressed(sf::Keyboard::D)) {
+        sf::Vector2f newPos = player.position;
+        newPos.x += player.direction.y * currentMoveSpeed;
+        newPos.y -= player.direction.x * currentMoveSpeed;
         
         if (canMoveTo(player, newPos, map)) {
             player.position = newPos;
         }
     }
     
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) {
-        sf::Vector2f newPos = player.position;
-        newPos.x -= player.direction.y * MOVE_SPEED * deltaTime;
-        newPos.y += player.direction.x * MOVE_SPEED * deltaTime;
-        
-        if (canMoveTo(player, newPos, map)) {
-            player.position = newPos;
-        }
-    }
-    
-    // Вращение (без коллизий)
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) {
+    // Поворот налево (Стрелка влево/Q)
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left) || sf::Keyboard::isKeyPressed(sf::Keyboard::Q)) {
         float oldDirX = player.direction.x;
-        player.direction.x = player.direction.x * cos(ROTATION_SPEED * deltaTime) - 
-                            player.direction.y * sin(ROTATION_SPEED * deltaTime);
-        player.direction.y = oldDirX * sin(ROTATION_SPEED * deltaTime) + 
-                            player.direction.y * cos(ROTATION_SPEED * deltaTime);
+        player.direction.x = player.direction.x * cos(currentRotationSpeed) - 
+                            player.direction.y * sin(currentRotationSpeed);
+        player.direction.y = oldDirX * sin(currentRotationSpeed) + 
+                            player.direction.y * cos(currentRotationSpeed);
         
         float oldPlaneX = player.plane.x;
-        player.plane.x = player.plane.x * cos(ROTATION_SPEED * deltaTime) - 
-                        player.plane.y * sin(ROTATION_SPEED * deltaTime);
-        player.plane.y = oldPlaneX * sin(ROTATION_SPEED * deltaTime) + 
-                        player.plane.y * cos(ROTATION_SPEED * deltaTime);
+        player.plane.x = player.plane.x * cos(currentRotationSpeed) - 
+                        player.plane.y * sin(currentRotationSpeed);
+        player.plane.y = oldPlaneX * sin(currentRotationSpeed) + 
+                        player.plane.y * cos(currentRotationSpeed);
     }
     
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) {
+    // Поворот направо (Стрелка вправо/E)
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right) || sf::Keyboard::isKeyPressed(sf::Keyboard::E)) {
         float oldDirX = player.direction.x;
-        player.direction.x = player.direction.x * cos(-ROTATION_SPEED * deltaTime) - 
-                            player.direction.y * sin(-ROTATION_SPEED * deltaTime);
-        player.direction.y = oldDirX * sin(-ROTATION_SPEED * deltaTime) + 
-                            player.direction.y * cos(-ROTATION_SPEED * deltaTime);
+        player.direction.x = player.direction.x * cos(-currentRotationSpeed) - 
+                            player.direction.y * sin(-currentRotationSpeed);
+        player.direction.y = oldDirX * sin(-currentRotationSpeed) + 
+                            player.direction.y * cos(-currentRotationSpeed);
         
         float oldPlaneX = player.plane.x;
-        player.plane.x = player.plane.x * cos(-ROTATION_SPEED * deltaTime) - 
-                        player.plane.y * sin(-ROTATION_SPEED * deltaTime);
-        player.plane.y = oldPlaneX * sin(-ROTATION_SPEED * deltaTime) + 
-                        player.plane.y * cos(-ROTATION_SPEED * deltaTime);
+        player.plane.x = player.plane.x * cos(-currentRotationSpeed) - 
+                        player.plane.y * sin(-currentRotationSpeed);
+        player.plane.y = oldPlaneX * sin(-currentRotationSpeed) + 
+                        player.plane.y * cos(-currentRotationSpeed);
     }
 }
 
@@ -91,4 +97,13 @@ bool InputHandler::canMoveTo(const PlayerState& player, const sf::Vector2f& newP
     
     // Проверяем, является ли клетка стеной
     return map[mapY][mapX] == 0;
+}
+
+float InputHandler::getCurrentMoveSpeed() const {
+    // Проверяем зажат ли Shift (любой)
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift) || 
+        sf::Keyboard::isKeyPressed(sf::Keyboard::RShift)) {
+        return RUN_SPEED;
+    }
+    return MOVE_SPEED;
 }
