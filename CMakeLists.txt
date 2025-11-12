@@ -23,6 +23,9 @@ add_executable(game
     src/engine/renderer/Renderer.h
     src/engine/geographer/MapLoader.cpp
     src/engine/geographer/MapLoader.h
+    src/resource_manager/ResourceManager.cpp
+    src/resource_manager/ResourceManager.h
+    src/resource_manager/TextureNames.h
 )
 
 # Связывание с SFML
@@ -48,5 +51,25 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${SFML_LIB_DIR}/../bin/sfml-system-d-2.dll"
         $<TARGET_FILE_DIR:game>
+    )
+endif()
+
+# Копирование ресурсов в выходную директорию
+if(WIN32)
+    add_custom_command(TARGET game POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/resources"
+        $<TARGET_FILE_DIR:game>/resources
+    )
+else()
+    # Для Linux/Mac
+    add_custom_command(TARGET game POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+        $<TARGET_FILE_DIR:game>/resources
+    )
+    add_custom_command(TARGET game POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/resources/textures"
+        $<TARGET_FILE_DIR:game>/resources/textures
     )
 endif()

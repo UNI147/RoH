@@ -11,8 +11,12 @@ public:
 private:
     sf::RenderWindow& window_;
     
-    void drawWallStrip(int x, int lineHeight, int side, float wallX);
+    void drawWallStrip(int x, int drawStart, int drawEnd, int side, float distance);
     void drawFloorAndCeiling(int x, int drawStart, int drawEnd);
+    void drawTexturedWallStrip(int x, int drawStart, int drawEnd, const RayHit& hit, const PlayerState& player);
+    void drawTexturedFloorAndCeiling(const PlayerState& player, const std::vector<std::vector<int>>& map,
+                                    RayCaster& rayCaster);
+    void drawSolidFloorAndCeiling();
     
     const int RENDER_WIDTH = 320;
     const int RENDER_HEIGHT = 200;
@@ -20,5 +24,12 @@ private:
     sf::RenderTexture renderTexture_;
     sf::Sprite renderSprite_;
     
+    // Предзагруженные изображения текстур для производительности
+    sf::Image wallTextureImage_;
+    sf::Image floorTextureImage_;
+    sf::Image ceilingTextureImage_;
+    
     void updateRenderSpriteScale();
+    
+    bool useTextures_ = true;
 };

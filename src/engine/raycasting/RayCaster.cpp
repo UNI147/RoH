@@ -7,22 +7,22 @@ RayHit RayCaster::castRay(const PlayerState& player, const std::vector<std::vect
     RayHit hit;
     
     // Вычисление направления луча
-    float rayDirX = player.direction.x + player.plane.x * cameraX;
-    float rayDirY = player.direction.y + player.plane.y * cameraX;
+    hit.rayDirX = player.direction.x + player.plane.x * cameraX;
+    hit.rayDirY = player.direction.y + player.plane.y * cameraX;
     
     // Позиция игрока на карте
     int mapX = static_cast<int>(player.position.x);
     int mapY = static_cast<int>(player.position.y);
     
     // Длина луча от текущей позиции до следующей x или y-стороны
-    float deltaDistX = std::abs(1 / rayDirX);
-    float deltaDistY = std::abs(1 / rayDirY);
+    float deltaDistX = std::abs(1 / hit.rayDirX);
+    float deltaDistY = std::abs(1 / hit.rayDirY);
     
     // Направление шага и начальное расстояние до стороны
     int stepX, stepY;
     float sideDistX, sideDistY;
     
-    if (rayDirX < 0) {
+    if (hit.rayDirX < 0) {
         stepX = -1;
         sideDistX = (player.position.x - mapX) * deltaDistX;
     } else {
@@ -30,7 +30,7 @@ RayHit RayCaster::castRay(const PlayerState& player, const std::vector<std::vect
         sideDistX = (mapX + 1.0f - player.position.x) * deltaDistX;
     }
     
-    if (rayDirY < 0) {
+    if (hit.rayDirY < 0) {
         stepY = -1;
         sideDistY = (player.position.y - mapY) * deltaDistY;
     } else {
@@ -62,9 +62,9 @@ RayHit RayCaster::castRay(const PlayerState& player, const std::vector<std::vect
     
     // Вычисление расстояния до стены
     if (side == 0) {
-        hit.distance = (mapX - player.position.x + (1 - stepX) / 2) / rayDirX;
+        hit.distance = (mapX - player.position.x + (1 - stepX) / 2) / hit.rayDirX;
     } else {
-        hit.distance = (mapY - player.position.y + (1 - stepY) / 2) / rayDirY;
+        hit.distance = (mapY - player.position.y + (1 - stepY) / 2) / hit.rayDirY;
     }
     
     hit.mapX = mapX;
@@ -73,11 +73,26 @@ RayHit RayCaster::castRay(const PlayerState& player, const std::vector<std::vect
     
     // Вычисление позиции удара о стену для текстурирования
     if (side == 0) {
-        hit.wallX = player.position.y + hit.distance * rayDirY;
+        hit.wallX = player.position.y + hit.distance * hit.rayDirY;
     } else {
-        hit.wallX = player.position.x + hit.distance * rayDirX;
+        hit.wallX = player.position.x + hit.distance * hit.rayDirX;
     }
     hit.wallX -= std::floor(hit.wallX);
+    
+    // Вычисление координат пола для текстурирования
+    if (side == 0 && hit.rayDirX > 0) {
+        hit.floorXWall = static_cast<float>(mapX);
+        hit.floorYWall = static_cast<float>(mapY) + hit.wallX;
+    } else if (side == 0 && hit.rayDirX < 0) {
+        hit.floorXWall = static_cast<float>(mapX) + 1.0f;
+        hit.floorYWall = static_cast<float>(mapY) + hit.wallX;
+    } else if (side == 1 && hit.rayDirY > 0) {
+        hit.floorXWall = static_cast<float>(mapX) + hit.wallX;
+        hit.floorYWall = static_cast<float>(mapY);
+    } else {
+        hit.floorXWall = static_cast<float>(mapX) + hit.wallX;
+        hit.floorYWall = static_cast<float>(mapY) + 1.0f;
+    }
     
     return hit;
 }

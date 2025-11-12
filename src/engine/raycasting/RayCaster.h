@@ -13,6 +13,10 @@ struct RayHit {
     int mapX, mapY;
     int side;
     float wallX;
+    float rayDirX;
+    float rayDirY;
+    float floorXWall;
+    float floorYWall;
 };
 
 class RayCaster {
