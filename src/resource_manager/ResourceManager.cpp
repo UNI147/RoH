@@ -61,7 +61,34 @@ bool ResourceManager::hasMusic(const std::string& name) const {
     return musicTracks_.find(name) != musicTracks_.end();
 }
 
+bool ResourceManager::loadSound(const std::string& name, const std::string& filename) {
+    auto soundBuffer = std::make_unique<sf::SoundBuffer>();
+    
+    if (!soundBuffer->loadFromFile(filename)) {
+        std::cerr << "Failed to load sound: " << filename << std::endl;
+        return false;
+    }
+    
+    soundBuffers_[name] = std::move(soundBuffer);
+    std::cout << "Loaded sound: " << name << " from " << filename << std::endl;
+    return true;
+}
+
+sf::SoundBuffer& ResourceManager::getSound(const std::string& name) {
+    auto it = soundBuffers_.find(name);
+    if (it != soundBuffers_.end()) {
+        return *it->second;
+    }
+    
+    throw std::runtime_error("Sound not found: " + name);
+}
+
+bool ResourceManager::hasSound(const std::string& name) const {
+    return soundBuffers_.find(name) != soundBuffers_.end();
+}
+
 void ResourceManager::clear() {
     textures_.clear();
     musicTracks_.clear();
+    soundBuffers_.clear();
 }

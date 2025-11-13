@@ -1,12 +1,14 @@
 #include "Game.h"
 #include <iostream>
 #include "resource_manager/MusicNames.h"
+#include "resource_manager/SoundNames.h"
 
 Game::Game(sf::RenderWindow& window) 
     : window_(window) {
     
     loadLevel();
     initializeAudio();
+    loadSounds();
     
     renderer_ = std::make_unique<Renderer>(window_);
     
@@ -50,11 +52,47 @@ void Game::initializeAudio() {
     }
 }
 
+void Game::loadSounds() {
+    auto& rm = ResourceManager::getInstance();
+    
+    // Загружаем звук шагов
+    std::vector<std::string> stepPaths = {
+        "resources/sounds/effects/step.wav",
+        "../resources/sounds/effects/step.wav",
+        "../../resources/sounds/effects/step.wav"
+    };
+    
+    bool stepLoaded = false;
+    for (const auto& path : stepPaths) {
+        if (rm.loadSound(Sounds::STEP, path)) {
+            stepLoaded = true;
+            std::cout << "Step sound loaded from: " << path << std::endl;
+            break;
+        }
+    }
+    
+    if (!stepLoaded) {
+        std::cerr << "Failed to load step sound effect!" << std::endl;
+    }
+}
+
 void Game::update() {
     float deltaTime = clock_.restart().asSeconds();
     
     handleEvents();
+    
+    // Сохраняем старое положение для определения движения
+    sf::Vector2f oldPosition = player_.position;
+    
+    // Обрабатываем ввод
     inputHandler_.handleInput(player_, deltaTime, currentLevel_.grid);
+    
+    // Определяем, двигается ли игрок
+    bool isMoving = (player_.position != oldPosition);
+    bool isRunning = inputHandler_.isRunning();
+    
+    // Обновляем звуки шагов
+    soundEngineer_.updateFootsteps(isMoving, isRunning, deltaTime);
 }
 
 void Game::render() {
@@ -71,14 +109,5 @@ void Game::handleEvents() {
         
         if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape)
             window_.close();
-            
-        // Управление звуком
-        if (event.type == sf::Event::KeyPressed) {
-            if (event.key.code == sf::Keyboard::M) {
-                static bool muted = false;
-                soundEngineer_.setMusicVolume(muted ? 50.0f : 0.0f);
-                muted = !muted;
-            }
-        }
     }
 }

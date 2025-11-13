@@ -19,6 +19,11 @@ public:
     sf::Music& getMusic(const std::string& name);
     bool hasMusic(const std::string& name) const;
     
+    // Загрузка звуковых эффектов
+    bool loadSound(const std::string& name, const std::string& filename);
+    sf::SoundBuffer& getSound(const std::string& name);
+    bool hasSound(const std::string& name) const;
+    
     // Очистка всех ресурсов
     void clear();
 
@@ -28,6 +33,7 @@ private:
     
     std::unordered_map<std::string, std::unique_ptr<sf::Texture>> textures_;
     std::unordered_map<std::string, std::unique_ptr<sf::Music>> musicTracks_;
+    std::unordered_map<std::string, std::unique_ptr<sf::SoundBuffer>> soundBuffers_;
     
     // Запрещаем копирование
     ResourceManager(const ResourceManager&) = delete;

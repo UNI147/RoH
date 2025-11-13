@@ -6,6 +6,10 @@ void InputHandler::handleInput(PlayerState& player, float deltaTime,
     // Сохраняем старую позицию для отката при коллизии
     sf::Vector2f oldPosition = player.position;
     
+    // Определяем, бежит ли игрок
+    isRunning_ = (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift) || 
+                 sf::Keyboard::isKeyPressed(sf::Keyboard::RShift));
+    
     float currentMoveSpeed = getCurrentMoveSpeed() * deltaTime;
     float currentRotationSpeed = ROTATION_SPEED * deltaTime;
     
@@ -100,10 +104,5 @@ bool InputHandler::canMoveTo(const PlayerState& player, const sf::Vector2f& newP
 }
 
 float InputHandler::getCurrentMoveSpeed() const {
-    // Проверяем зажат ли Shift (любой)
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift) || 
-        sf::Keyboard::isKeyPressed(sf::Keyboard::RShift)) {
-        return RUN_SPEED;
-    }
-    return MOVE_SPEED;
+    return isRunning_ ? RUN_SPEED : MOVE_SPEED;
 }

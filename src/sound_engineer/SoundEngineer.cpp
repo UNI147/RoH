@@ -1,7 +1,9 @@
 #include "SoundEngineer.h"
 #include <iostream>
+#include <algorithm>
 #include "resource_manager/ResourceManager.h"
 #include "resource_manager/MusicNames.h"
+#include "resource_manager/SoundNames.h"
 
 SoundEngineer::SoundEngineer() 
 #ifndef NO_FLUIDSYNTH
@@ -215,4 +217,99 @@ void SoundEngineer::setMusicVolume(float volume) {
     setMIDIVolume(volume / 100.0f); // Конвертируем из 0-100 в 0.0-1.0
     
     // Здесь можно добавить установку громкости для SFML музыки
+}
+
+// Звуковые эффекты
+void SoundEngineer::playSound(const std::string& name, float volume, float pitch) {
+    auto& rm = ResourceManager::getInstance();
+    if (rm.hasSound(name)) {
+        try {
+            auto sound = std::make_unique<sf::Sound>();
+            sound->setBuffer(rm.getSound(name));
+            sound->setVolume(volume);
+            sound->setPitch(pitch);
+            sound->play();
+            
+            // Добавляем в активные звуки
+            activeSounds_.push_back(std::move(sound));
+        } catch (const std::exception& e) {
+            std::cerr << "Error playing sound: " << e.what() << std::endl;
+        }
+    } else {
+        std::cerr << "Sound not found: " << name << std::endl;
+    }
+}
+
+void SoundEngineer::stopAllSounds() {
+    for (auto& sound : activeSounds_) {
+        sound->stop();
+    }
+    activeSounds_.clear();
+}
+
+// Система шагов
+void SoundEngineer::updateFootsteps(bool isMoving, bool isRunning, float deltaTime) {
+    if (!footstepsEnabled_) return;
+    
+    if (isMoving) {
+        stepTimer_ -= deltaTime;
+        
+        if (stepTimer_ <= 0.0f) {
+            // Определяем интервал между шагами
+            float stepInterval = baseStepInterval_;
+            if (isRunning) {
+                stepInterval *= 0.6f;
+            }
+            
+            // Воспроизводим звук шага
+            playStepSound(leftStep_ ? 100.0f : 50.0f, isRunning ? 1.2f : 1.0f);
+            
+            // Чередуем ноги
+            leftStep_ = !leftStep_;
+            
+            // Сбрасываем таймер
+            stepTimer_ = stepInterval;
+        }
+    } else {
+        stepTimer_ = 0.0f;
+    }
+    
+    // Очищаем завершенные звуки
+    activeSounds_.erase(
+        std::remove_if(activeSounds_.begin(), activeSounds_.end(),
+            [](const std::unique_ptr<sf::Sound>& sound) {
+                return sound->getStatus() == sf::Sound::Stopped;
+            }),
+        activeSounds_.end()
+    );
+}
+
+void SoundEngineer::setFootstepsEnabled(bool enabled) {
+    footstepsEnabled_ = enabled;
+    if (!enabled) {
+        stepTimer_ = 0.0f;
+    }
+}
+
+void SoundEngineer::playStepSound(float volume, float pitch) {
+    auto& rm = ResourceManager::getInstance();
+    
+    // Основной звук шага
+    if (rm.hasSound(Sounds::STEP)) {
+        auto mainSound = std::make_unique<sf::Sound>();
+        mainSound->setBuffer(rm.getSound(Sounds::STEP));
+        mainSound->setVolume(volume);
+        mainSound->setPitch(pitch);
+        mainSound->play();
+        activeSounds_.push_back(std::move(mainSound));
+        
+        // Эхо-эффект (воспроизводим с небольшой задержкой)
+        auto echoSound = std::make_unique<sf::Sound>();
+        echoSound->setBuffer(rm.getSound(Sounds::STEP));
+        echoSound->setVolume(volume * 0.5f);
+        echoSound->setPitch(pitch * 0.75f);
+        echoSound->setPlayingOffset(sf::milliseconds(80));
+        echoSound->play();
+        activeSounds_.push_back(std::move(echoSound));
+    }
 }

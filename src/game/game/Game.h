@@ -32,4 +32,5 @@ private:
     void handleEvents();
     void loadLevel();
     void initializeAudio();
+    void loadSounds();
 };
