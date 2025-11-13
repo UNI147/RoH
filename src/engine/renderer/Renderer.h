@@ -1,5 +1,6 @@
 #pragma once
 #include <SFML/Graphics.hpp>
+#include <unordered_map>
 #include "../raycasting/RayCaster.h"
 
 class Renderer {
@@ -7,6 +8,7 @@ public:
     Renderer(sf::RenderWindow& window);
     void renderFrame(const PlayerState& player, const std::vector<std::vector<int>>& map,
                     RayCaster& rayCaster);
+    void setWallTexture(int wallType, const std::string& textureName);
 
 private:
     sf::RenderWindow& window_;
@@ -28,6 +30,9 @@ private:
     sf::Image wallTextureImage_;
     sf::Image floorTextureImage_;
     sf::Image ceilingTextureImage_;
+    
+    // Карта текстур для стен
+    std::unordered_map<int, const sf::Texture*> wallTextures_;
     
     void updateRenderSpriteScale();
     

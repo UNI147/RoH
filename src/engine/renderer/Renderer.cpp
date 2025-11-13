@@ -255,3 +255,10 @@ void Renderer::drawWallStrip(int x, int drawStart, int drawEnd, int side, float 
 
 void Renderer::drawFloorAndCeiling(int x, int drawStart, int drawEnd) {
 }
+
+void Renderer::setWallTexture(int wallType, const std::string& textureName) {
+    auto& rm = ResourceManager::getInstance();
+    if (rm.hasTexture(textureName)) {
+        wallTextures_[wallType] = &rm.getTexture(textureName);
+    }
+}

@@ -1,77 +1,52 @@
 #include "Game.h"
 #include <iostream>
-#include <filesystem>
-#include <vector>
-#include <string>
-
-using std::cout;
-using std::cerr;
-using std::endl;
-using std::string;
-using std::vector;
-using std::filesystem::current_path;
-using std::filesystem::exists;
+#include "resource_manager/MusicNames.h"
 
 Game::Game(sf::RenderWindow& window) 
     : window_(window) {
     
-    // Сначала загружаем ресурсы
-    loadResources();
+    loadLevel();
+    initializeAudio();
     
-    // Затем инициализируем рендерер (после загрузки текстур)
     renderer_ = std::make_unique<Renderer>(window_);
     
-    // Инициализация игрока
-    player_.position = sf::Vector2f(1.5f, 1.5f);
-    player_.direction = sf::Vector2f(-1.0f, 0.0f);
+    // Инициализация игрока из данных уровня
+    player_.position = currentLevel_.playerStartPosition;
+    player_.direction = currentLevel_.playerStartDirection;
     player_.plane = sf::Vector2f(0.0f, 0.66f);
-
-    // Загрузка карты
-    map_ = mapLoader_.createTestMap();
 }
 
-void Game::loadResources() {
-    auto& rm = ResourceManager::getInstance();
+void Game::loadLevel() {
+    std::cout << "Loading level resources..." << std::endl;
     
-    cout << "Current working directory: " << current_path() << endl;
+    // Загружаем уровень через MapLoader (включая все ресурсы)
+    currentLevel_ = mapLoader_.loadLevel("resources/levels/test_level.roh");
     
-    vector<string> possiblePaths = {
-        "resources/textures/surfaces/",
-        "../resources/textures/surfaces/",
-        "../../resources/textures/surfaces/",
-        "../../../resources/textures/surfaces/",
-        "textures/surfaces/",
-        "../textures/surfaces/"
-    };
-    
-    bool texturesLoaded = false;
-    
-    for (const auto& path : possiblePaths) {
-        string bricksPath = path + "bricks.png";
-        
-        if (exists(bricksPath)) {
-            cout << "Found textures in: " << path << endl;
-            
-            if (rm.loadTexture("bricks", bricksPath) &&
-                rm.loadTexture("boards", path + "boards.png") &&
-                rm.loadTexture("parquet", path + "parquet.png")) {
-                
-                texturesLoaded = true;
-                cout << "All textures successfully loaded!" << endl;
-                
-                try {
-                    auto& bricksTex = rm.getTexture("bricks");
-                    cout << "Bricks texture size: " << bricksTex.getSize().x << "x" << bricksTex.getSize().y << endl;
-                } catch (const std::exception& e) {
-                    cerr << "Error checking texture: " << e.what() << endl;
-                }
-                break;
-            }
-        }
+    // Если файл уровня не найден, используем тестовый уровень
+    if (currentLevel_.grid.empty()) {
+        std::cout << "Using test level..." << std::endl;
+        currentLevel_ = mapLoader_.createTestLevel();
     }
     
-    if (!texturesLoaded) {
-        cerr << "Failed to load textures from all possible paths!" << endl;
+    std::cout << "Level loaded successfully!" << std::endl;
+    std::cout << "Grid size: " << currentLevel_.grid.size() << "x" 
+              << (currentLevel_.grid.empty() ? 0 : currentLevel_.grid[0].size()) << std::endl;
+    std::cout << "Textures loaded: " << currentLevel_.textures.size() << std::endl;
+    std::cout << "Background music: " << currentLevel_.backgroundMusic << std::endl;
+}
+
+void Game::initializeAudio() {
+    // Загружаем MIDI файл через SoundEngineer
+    if (!currentLevel_.backgroundMusic.empty()) {
+        if (soundEngineer_.loadMIDI(Music::ADRIANS_ASLEEP, currentLevel_.backgroundMusic)) {
+            soundEngineer_.playMIDI(Music::ADRIANS_ASLEEP, true);
+            soundEngineer_.setMusicVolume(50.0f);
+            std::cout << "Playing level music as MIDI: " << Music::ADRIANS_ASLEEP << std::endl;
+        } else {
+            std::cerr << "Failed to load MIDI music: " << currentLevel_.backgroundMusic << std::endl;
+        }
+    } else {
+        std::cerr << "No background music specified for level!" << std::endl;
     }
 }
 
@@ -79,12 +54,12 @@ void Game::update() {
     float deltaTime = clock_.restart().asSeconds();
     
     handleEvents();
-    inputHandler_.handleInput(player_, deltaTime, map_);
+    inputHandler_.handleInput(player_, deltaTime, currentLevel_.grid);
 }
 
 void Game::render() {
     window_.clear();
-    renderer_->renderFrame(player_, map_, rayCaster_);
+    renderer_->renderFrame(player_, currentLevel_.grid, rayCaster_);
     window_.display();
 }
 
@@ -96,5 +71,14 @@ void Game::handleEvents() {
         
         if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape)
             window_.close();
+            
+        // Управление звуком
+        if (event.type == sf::Event::KeyPressed) {
+            if (event.key.code == sf::Keyboard::M) {
+                static bool muted = false;
+                soundEngineer_.setMusicVolume(muted ? 50.0f : 0.0f);
+                muted = !muted;
+            }
+        }
     }
 }

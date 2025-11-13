@@ -4,6 +4,7 @@
 #include "engine/raycasting/RayCaster.h"
 #include "engine/renderer/Renderer.h"
 #include "engine/geographer/MapLoader.h"
+#include "sound_engineer/SoundEngineer.h"
 #include "input_handler/InputHandler.h"
 #include "resource_manager/ResourceManager.h"
 
@@ -20,13 +21,15 @@ private:
     // Системы игры
     MapLoader mapLoader_;
     RayCaster rayCaster_;
-    std::unique_ptr<Renderer> renderer_; // Теперь как умный указатель
+    std::unique_ptr<Renderer> renderer_;
     InputHandler inputHandler_;
+    SoundEngineer soundEngineer_;
     
     // Состояние игры
     PlayerState player_;
-    std::vector<std::vector<int>> map_;
+    LevelResources currentLevel_;
     
     void handleEvents();
-    void loadResources();
+    void loadLevel();
+    void initializeAudio();
 };
