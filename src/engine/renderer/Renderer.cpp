@@ -47,6 +47,15 @@ Renderer::Renderer(sf::RenderWindow& window)
     }
 }
 
+// Методы для управления высотой обзора
+void Renderer::setViewHeight(float height) {
+    viewHeight_ = std::max(0.0f, std::min(1.0f, height));
+}
+
+float Renderer::getViewHeight() const {
+    return viewHeight_;
+}
+
 void Renderer::renderFrame(const PlayerState& player, const std::vector<std::vector<int>>& map,
                           RayCaster& rayCaster) {
     updateRenderSpriteScale();
@@ -64,10 +73,15 @@ void Renderer::renderFrame(const PlayerState& player, const std::vector<std::vec
         float cameraX = 2 * x / float(RENDER_WIDTH) - 1;
         RayHit hit = rayCaster.castRay(player, map, cameraX);
         
+        // Правильный расчет высоты стены с учетом высоты обзора
         int lineHeight = static_cast<int>(RENDER_HEIGHT / hit.distance);
-        int drawStart = -lineHeight / 2 + RENDER_HEIGHT / 2;
+        
+        // Расчет: viewHeight_ смещает точку обзора
+        int horizonLine = static_cast<int>(RENDER_HEIGHT * viewHeight_);
+        int drawStart = horizonLine - lineHeight / 2;
+        int drawEnd = horizonLine + lineHeight / 2;
+        
         if (drawStart < 0) drawStart = 0;
-        int drawEnd = lineHeight / 2 + RENDER_HEIGHT / 2;
         if (drawEnd >= RENDER_HEIGHT) drawEnd = RENDER_HEIGHT - 1;
         
         if (useTextures_) {
@@ -98,12 +112,17 @@ void Renderer::drawTexturedWallStrip(int x, int drawStart, int drawEnd, const Ra
     
     // Правильное вычисление шага текстуры по Y
     float step = static_cast<float>(wallTextureImage_.getSize().y) / static_cast<float>(lineHeight);
-    float texPos = (static_cast<float>(drawStart) - RENDER_HEIGHT / 2.0f + static_cast<float>(lineHeight) / 2.0f) * step;
     
-    // Применяем затемнение в зависимости от расстояния и стороны
-    float brightness = std::min(1.0f, 8.0f / hit.distance);
+    // Исправленный расчет позиции текстуры с учетом высоты обзора
+    float texPos = (static_cast<float>(drawStart) - static_cast<float>(RENDER_HEIGHT) * viewHeight_ + static_cast<float>(lineHeight) / 2.0f) * step;
+    
+    // Интенсивное затенение
+    float brightness = 1.0f - (hit.distance / maxDarkDistance_);
+    brightness = std::max(0.0f, std::min(1.0f, brightness));
+    
+    // Дополнительное затемнение для Y-сторон
     if (hit.side == 1) {
-        brightness *= 0.8f; // Более темный цвет для Y-сторон
+        brightness *= 0.7f;
     }
     
     for (int y = drawStart; y < drawEnd; ++y) {
@@ -112,7 +131,7 @@ void Renderer::drawTexturedWallStrip(int x, int drawStart, int drawEnd, const Ra
         
         sf::Color pixelColor = wallTextureImage_.getPixel(texX, texY);
         
-        // Применяем затемнение
+        // Применяем интенсивное затемнение
         pixelColor.r = static_cast<sf::Uint8>(static_cast<float>(pixelColor.r) * brightness);
         pixelColor.g = static_cast<sf::Uint8>(static_cast<float>(pixelColor.g) * brightness);
         pixelColor.b = static_cast<sf::Uint8>(static_cast<float>(pixelColor.b) * brightness);
@@ -127,22 +146,25 @@ void Renderer::drawTexturedWallStrip(int x, int drawStart, int drawEnd, const Ra
 
 void Renderer::drawTexturedFloorAndCeiling(const PlayerState& player, const std::vector<std::vector<int>>& map,
                                           RayCaster& rayCaster) {
-    // Рендерим пол и потолок для всего экрана
-    for (int y = RENDER_HEIGHT / 2 + 1; y < RENDER_HEIGHT; ++y) {
+    // Исправленный рендеринг пола и потолка с учетом высоты обзора
+    int horizonLine = static_cast<int>(RENDER_HEIGHT * viewHeight_);
+    
+    // Рендерим пол (ниже горизонта)
+    for (int y = horizonLine + 1; y < RENDER_HEIGHT; ++y) {
         // Луч для пола
         float rayDirX0 = player.direction.x - player.plane.x;
         float rayDirY0 = player.direction.y - player.plane.y;
         float rayDirX1 = player.direction.x + player.plane.x;
         float rayDirY1 = player.direction.y + player.plane.y;
         
-        // Текущая позиция ряда пикселей
-        int p = y - RENDER_HEIGHT / 2;
+        // Текущая позиция ряда пикселей относительно горизонта
+        float p = y - horizonLine;
         
-        // Вертикальная позиция камеры
+        // Вертикальная позиция камеры (учитываем высоту обзора)
         float posZ = 0.5f * static_cast<float>(RENDER_HEIGHT);
         
         // Горизонтальное расстояние от камеры к полу для текущего ряда
-        float rowDistance = posZ / static_cast<float>(p);
+        float rowDistance = posZ / p;
         
         // Вычисляем реальные шаги
         float floorStepX = rowDistance * (rayDirX1 - rayDirX0) / static_cast<float>(RENDER_WIDTH);
@@ -153,7 +175,7 @@ void Renderer::drawTexturedFloorAndCeiling(const PlayerState& player, const std:
         float floorY = player.position.y + rowDistance * rayDirY0;
         
         for (int x = 0; x < RENDER_WIDTH; ++x) {
-            // Координаты текстуры для пола - ИНВЕРТИРУЕМ по X чтобы исправить отзеркаливание
+            // Координаты текстуры для пола
             int floorTexX = static_cast<int>(static_cast<float>(floorTextureImage_.getSize().x) * (1.0f - (floorX - std::floor(floorX))));
             int floorTexY = static_cast<int>(static_cast<float>(floorTextureImage_.getSize().y) * (floorY - std::floor(floorY)));
             
@@ -161,9 +183,12 @@ void Renderer::drawTexturedFloorAndCeiling(const PlayerState& player, const std:
             floorTexX = std::max(0, std::min(floorTexX, static_cast<int>(floorTextureImage_.getSize().x) - 1));
             floorTexY = std::max(0, std::min(floorTexY, static_cast<int>(floorTextureImage_.getSize().y) - 1));
             
+            // Интенсивное затенение для пола
+            float floorBrightness = 1.0f - (rowDistance / maxDarkDistance_);
+            floorBrightness = std::max(0.0f, std::min(1.0f, floorBrightness));
+            
             // Цвет пола
             sf::Color floorColor = floorTextureImage_.getPixel(floorTexX, floorTexY);
-            float floorBrightness = std::min(1.0f, 3.0f / rowDistance);
             floorColor.r = static_cast<sf::Uint8>(static_cast<float>(floorColor.r) * floorBrightness);
             floorColor.g = static_cast<sf::Uint8>(static_cast<float>(floorColor.g) * floorBrightness);
             floorColor.b = static_cast<sf::Uint8>(static_cast<float>(floorColor.b) * floorBrightness);
@@ -172,50 +197,81 @@ void Renderer::drawTexturedFloorAndCeiling(const PlayerState& player, const std:
             sf::Vertex floorPixel(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)), floorColor);
             renderTexture_.draw(&floorPixel, 1, sf::Points);
             
-            // Симметрично рендерим потолок с отдельной текстурой
-            int ceilingY = RENDER_HEIGHT - y - 1;
-            if (ceilingY >= 0) {
-                // Координаты текстуры для потолка (используем отдельную текстуру)
-                int ceilingTexX = static_cast<int>(static_cast<float>(ceilingTextureImage_.getSize().x) * (floorX - std::floor(floorX)));
-                int ceilingTexY = static_cast<int>(static_cast<float>(ceilingTextureImage_.getSize().y) * (floorY - std::floor(floorY)));
-                
-                // Ограничиваем координаты текстуры
-                ceilingTexX = std::max(0, std::min(ceilingTexX, static_cast<int>(ceilingTextureImage_.getSize().x) - 1));
-                ceilingTexY = std::max(0, std::min(ceilingTexY, static_cast<int>(ceilingTextureImage_.getSize().y) - 1));
-                
-                sf::Color ceilingColor = ceilingTextureImage_.getPixel(ceilingTexX, ceilingTexY);
-                float ceilingBrightness = std::min(1.0f, 2.0f / rowDistance);
-                ceilingColor.r = static_cast<sf::Uint8>(static_cast<float>(ceilingColor.r) * ceilingBrightness);
-                ceilingColor.g = static_cast<sf::Uint8>(static_cast<float>(ceilingColor.g) * ceilingBrightness);
-                ceilingColor.b = static_cast<sf::Uint8>(static_cast<float>(ceilingColor.b) * ceilingBrightness);
-                
-                sf::Vertex ceilingPixel(sf::Vector2f(static_cast<float>(x), static_cast<float>(ceilingY)), ceilingColor);
-                renderTexture_.draw(&ceilingPixel, 1, sf::Points);
-            }
-            
             floorX += floorStepX;
             floorY += floorStepY;
+        }
+    }
+    
+    // Рендерим потолок (выше горизонта)
+    for (int y = 0; y < horizonLine; ++y) {
+        // Луч для потолка
+        float rayDirX0 = player.direction.x - player.plane.x;
+        float rayDirY0 = player.direction.y - player.plane.y;
+        float rayDirX1 = player.direction.x + player.plane.x;
+        float rayDirY1 = player.direction.y + player.plane.y;
+        
+        // Текущая позиция ряда пикселей относительно горизонта
+        float p = horizonLine - y;
+        
+        // Вертикальная позиция камеры
+        float posZ = 0.5f * static_cast<float>(RENDER_HEIGHT);
+        
+        // Горизонтальное расстояние от камеры к потолку для текущего ряда
+        float rowDistance = posZ / p;
+        
+        // Вычисляем реальные шаги
+        float ceilingStepX = rowDistance * (rayDirX1 - rayDirX0) / static_cast<float>(RENDER_WIDTH);
+        float ceilingStepY = rowDistance * (rayDirY1 - rayDirY0) / static_cast<float>(RENDER_WIDTH);
+        
+        // Реальная координата потолка
+        float ceilingX = player.position.x + rowDistance * rayDirX0;
+        float ceilingY = player.position.y + rowDistance * rayDirY0;
+        
+        for (int x = 0; x < RENDER_WIDTH; ++x) {
+            // Координаты текстуры для потолка
+            int ceilingTexX = static_cast<int>(static_cast<float>(ceilingTextureImage_.getSize().x) * (ceilingX - std::floor(ceilingX)));
+            int ceilingTexY = static_cast<int>(static_cast<float>(ceilingTextureImage_.getSize().y) * (ceilingY - std::floor(ceilingY)));
+            
+            // Ограничиваем координаты текстуры
+            ceilingTexX = std::max(0, std::min(ceilingTexX, static_cast<int>(ceilingTextureImage_.getSize().x) - 1));
+            ceilingTexY = std::max(0, std::min(ceilingTexY, static_cast<int>(ceilingTextureImage_.getSize().y) - 1));
+            
+            // Интенсивное затенение для потолка
+            float ceilingBrightness = 1.0f - (rowDistance / maxDarkDistance_);
+            ceilingBrightness = std::max(0.0f, std::min(1.0f, ceilingBrightness));
+            
+            sf::Color ceilingColor = ceilingTextureImage_.getPixel(ceilingTexX, ceilingTexY);
+            ceilingColor.r = static_cast<sf::Uint8>(static_cast<float>(ceilingColor.r) * ceilingBrightness);
+            ceilingColor.g = static_cast<sf::Uint8>(static_cast<float>(ceilingColor.g) * ceilingBrightness);
+            ceilingColor.b = static_cast<sf::Uint8>(static_cast<float>(ceilingColor.b) * ceilingBrightness);
+            
+            sf::Vertex ceilingPixel(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)), ceilingColor);
+            renderTexture_.draw(&ceilingPixel, 1, sf::Points);
+            
+            ceilingX += ceilingStepX;
+            ceilingY += ceilingStepY;
         }
     }
 }
 
 void Renderer::drawSolidFloorAndCeiling() {
-    // Простая заливка пола и потолка цветом
-    for (int x = 0; x < RENDER_WIDTH; ++x) {
-        // Пол
-        sf::Vertex floorLine[] = {
-            sf::Vertex(sf::Vector2f(static_cast<float>(x), static_cast<float>(RENDER_HEIGHT / 2)), sf::Color(50, 50, 50)),
-            sf::Vertex(sf::Vector2f(static_cast<float>(x), static_cast<float>(RENDER_HEIGHT)), sf::Color(50, 50, 50))
-        };
-        
-        // Потолок
-        sf::Vertex ceilingLine[] = {
-            sf::Vertex(sf::Vector2f(static_cast<float>(x), 0.0f), sf::Color(100, 100, 100)),
-            sf::Vertex(sf::Vector2f(static_cast<float>(x), static_cast<float>(RENDER_HEIGHT / 2)), sf::Color(100, 100, 100))
-        };
-        
-        renderTexture_.draw(floorLine, 2, sf::Lines);
-        renderTexture_.draw(ceilingLine, 2, sf::Lines);
+    // Исправленная заливка пола и потолка с учетом высоты обзора
+    int horizonLine = static_cast<int>(RENDER_HEIGHT * viewHeight_);
+    
+    // Рисуем пол (ниже горизонта)
+    for (int y = horizonLine; y < RENDER_HEIGHT; ++y) {
+        for (int x = 0; x < RENDER_WIDTH; ++x) {
+            sf::Vertex floorPixel(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)), sf::Color(50, 50, 50));
+            renderTexture_.draw(&floorPixel, 1, sf::Points);
+        }
+    }
+    
+    // Рисуем потолок (выше горизонта)
+    for (int y = 0; y < horizonLine; ++y) {
+        for (int x = 0; x < RENDER_WIDTH; ++x) {
+            sf::Vertex ceilingPixel(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)), sf::Color(100, 100, 100));
+            renderTexture_.draw(&ceilingPixel, 1, sf::Points);
+        }
     }
 }
 
@@ -240,7 +296,10 @@ void Renderer::drawWallStrip(int x, int drawStart, int drawEnd, int side, float 
         wallColor = sf::Color(100, 100, 200);
     }
     
-    float brightness = std::min(1.0f, 5.0f / distance);
+    // Интенсивное затенение для цветных стен
+    float brightness = 1.0f - (distance / maxDarkDistance_);
+    brightness = std::max(0.0f, std::min(1.0f, brightness));
+    
     wallColor.r = static_cast<sf::Uint8>(static_cast<float>(wallColor.r) * brightness);
     wallColor.g = static_cast<sf::Uint8>(static_cast<float>(wallColor.g) * brightness);
     wallColor.b = static_cast<sf::Uint8>(static_cast<float>(wallColor.b) * brightness);

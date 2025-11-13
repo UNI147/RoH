@@ -9,6 +9,10 @@ public:
     void renderFrame(const PlayerState& player, const std::vector<std::vector<int>>& map,
                     RayCaster& rayCaster);
     void setWallTexture(int wallType, const std::string& textureName);
+    
+    // Методы для управления высотой камеры (точки обзора)
+    void setViewHeight(float height);
+    float getViewHeight() const;
 
 private:
     sf::RenderWindow& window_;
@@ -37,4 +41,10 @@ private:
     void updateRenderSpriteScale();
     
     bool useTextures_ = true;
+    
+    // Высота точки обзора (0.0 = пол, 1.0 = потолок)
+    float viewHeight_ = 0.66f;
+    
+    // Максимальное расстояние затемнения
+    float maxDarkDistance_ = 5.0f;
 };
