@@ -43,6 +43,7 @@ private:
     void initializeResources();
     void setupLoadingScreen();
     void playBackgroundMusic();
+    void startAmbientSounds();
     void renderLoadingScreen();
     void updateLoadingScreen(float progress);
 };

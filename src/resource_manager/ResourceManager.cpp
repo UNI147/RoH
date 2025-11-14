@@ -5,6 +5,7 @@
 #include <filesystem>
 #include "resource_manager/TextureNames.h"
 #include "resource_manager/MusicNames.h"
+#include <algorithm>
 
 namespace fs = std::filesystem;
 
@@ -13,19 +14,50 @@ ResourceManager& ResourceManager::getInstance() {
     return instance;
 }
 
-bool ResourceManager::loadTexture(const std::string& name, const std::string& filename) {
-    auto texture = std::make_unique<sf::Texture>();
+// Метод для поиска файла по альтернативным путям
+std::string ResourceManager::findResourceFile(const std::string& filename) const {
+    FILE* testFile = nullptr;
     
-    if (!texture->loadFromFile(filename)) {
-        std::cerr << "Failed to load texture: " << filename << std::endl;
+    std::vector<std::string> possiblePaths = {
+        filename,
+        basePath_ + filename,
+        "../" + basePath_ + filename,
+        "../../" + basePath_ + filename,
+        "../../../" + basePath_ + filename,
+        "resources/" + filename,
+        "../resources/" + filename,
+        "../../resources/" + filename
+    };
+    
+    for (const auto& path : possiblePaths) {
+        if (fopen_s(&testFile, path.c_str(), "rb") == 0 && testFile) {
+            fclose(testFile);
+            std::cout << "Found resource at: " << path << std::endl;
+            return path;
+        }
+    }
+    
+    return "";
+}
+
+// Обновляем методы загрузки
+bool ResourceManager::loadTexture(const std::string& name, const std::string& filename) {
+    std::string foundPath = findResourceFile(filename);
+    if (foundPath.empty()) {
+        std::cerr << "Texture file not found: " << filename << std::endl;
+        return false;
+    }
+    
+    auto texture = std::make_unique<sf::Texture>();
+    if (!texture->loadFromFile(foundPath)) {
+        std::cerr << "Failed to load texture: " << foundPath << std::endl;
         return false;
     }
     
     texture->setSmooth(false);
     texture->setRepeated(true);
-    
     textures_[name] = std::move(texture);
-    std::cout << "Loaded texture: " << name << " from " << filename << std::endl;
+    std::cout << "Loaded texture: " << name << " from " << foundPath << std::endl;
     return true;
 }
 
@@ -43,15 +75,21 @@ bool ResourceManager::hasTexture(const std::string& name) const {
 }
 
 bool ResourceManager::loadMusic(const std::string& name, const std::string& filename) {
+    std::string foundPath = findResourceFile(filename);
+    if (foundPath.empty()) {
+        std::cerr << "Music file not found: " << filename << std::endl;
+        return false;
+    }
+    
     auto music = std::make_unique<sf::Music>();
     
-    if (!music->openFromFile(filename)) {
-        std::cerr << "Failed to load music: " << filename << std::endl;
+    if (!music->openFromFile(foundPath)) {
+        std::cerr << "Failed to load music: " << foundPath << std::endl;
         return false;
     }
     
     musicTracks_[name] = std::move(music);
-    std::cout << "Loaded music: " << name << " from " << filename << std::endl;
+    std::cout << "Loaded music: " << name << " from " << foundPath << std::endl;
     return true;
 }
 
@@ -69,15 +107,20 @@ bool ResourceManager::hasMusic(const std::string& name) const {
 }
 
 bool ResourceManager::loadSound(const std::string& name, const std::string& filename) {
-    auto soundBuffer = std::make_unique<sf::SoundBuffer>();
+    std::string foundPath = findResourceFile(filename);
+    if (foundPath.empty()) {
+        std::cerr << "Sound file not found: " << filename << std::endl;
+        return false;
+    }
     
-    if (!soundBuffer->loadFromFile(filename)) {
-        std::cerr << "Failed to load sound: " << filename << std::endl;
+    auto soundBuffer = std::make_unique<sf::SoundBuffer>();
+    if (!soundBuffer->loadFromFile(foundPath)) {
+        std::cerr << "Failed to load sound: " << foundPath << std::endl;
         return false;
     }
     
     soundBuffers_[name] = std::move(soundBuffer);
-    std::cout << "Loaded sound: " << name << " from " << filename << std::endl;
+    std::cout << "Loaded sound: " << name << " from " << foundPath << std::endl;
     return true;
 }
 
@@ -95,17 +138,14 @@ bool ResourceManager::hasSound(const std::string& name) const {
 }
 
 bool ResourceManager::loadMIDI(const std::string& name, const std::string& filename) {
-    // Проверяем существование файла
-    FILE* testFile = nullptr;
-    errno_t err = fopen_s(&testFile, filename.c_str(), "rb");
-    if (err != 0 || !testFile) {
-        std::cerr << "MIDI file not found: " << filename << " (error: " << err << ")" << std::endl;
+    std::string foundPath = findResourceFile(filename);
+    if (foundPath.empty()) {
+        std::cerr << "MIDI file not found: " << filename << std::endl;
         return false;
     }
-    fclose(testFile);
     
-    midiFiles_[name] = filename;
-    std::cout << "Loaded MIDI: " << name << " from " << filename << std::endl;
+    midiFiles_[name] = foundPath;
+    std::cout << "Loaded MIDI: " << name << " from " << foundPath << std::endl;
     return true;
 }
 
@@ -123,17 +163,14 @@ bool ResourceManager::hasMIDI(const std::string& name) const {
 }
 
 bool ResourceManager::loadSoundFont(const std::string& name, const std::string& filename) {
-    // Проверяем существование файла
-    FILE* testFile = nullptr;
-    errno_t err = fopen_s(&testFile, filename.c_str(), "rb");
-    if (err != 0 || !testFile) {
-        std::cerr << "SoundFont file not found: " << filename << " (error: " << err << ")" << std::endl;
+    std::string foundPath = findResourceFile(filename);
+    if (foundPath.empty()) {
+        std::cerr << "SoundFont file not found: " << filename << std::endl;
         return false;
     }
-    fclose(testFile);
     
-    soundFonts_[name] = filename;
-    std::cout << "Loaded SoundFont: " << name << " from " << filename << std::endl;
+    soundFonts_[name] = foundPath;
+    std::cout << "Loaded SoundFont: " << name << " from " << foundPath << std::endl;
     return true;
 }
 
@@ -151,15 +188,21 @@ bool ResourceManager::hasSoundFont(const std::string& name) const {
 }
 
 bool ResourceManager::loadFont(const std::string& name, const std::string& filename) {
+    std::string foundPath = findResourceFile(filename);
+    if (foundPath.empty()) {
+        std::cerr << "Font file not found: " << filename << std::endl;
+        return false;
+    }
+    
     auto font = std::make_unique<sf::Font>();
     
-    if (!font->loadFromFile(filename)) {
-        std::cerr << "Failed to load font: " << filename << std::endl;
+    if (!font->loadFromFile(foundPath)) {
+        std::cerr << "Failed to load font: " << foundPath << std::endl;
         return false;
     }
     
     fonts_[name] = std::move(font);
-    std::cout << "Loaded font: " << name << " from " << filename << std::endl;
+    std::cout << "Loaded font: " << name << " from " << foundPath << std::endl;
     return true;
 }
 
@@ -177,17 +220,14 @@ bool ResourceManager::hasFont(const std::string& name) const {
 }
 
 bool ResourceManager::loadLevel(const std::string& name, const std::string& filename) {
-    // Проверяем существование файла
-    FILE* testFile = nullptr;
-    errno_t err = fopen_s(&testFile, filename.c_str(), "rb");
-    if (err != 0 || !testFile) {
-        std::cerr << "Level file not found: " << filename << " (error: " << err << ")" << std::endl;
+    std::string foundPath = findResourceFile(filename);
+    if (foundPath.empty()) {
+        std::cerr << "Level file not found: " << filename << std::endl;
         return false;
     }
-    fclose(testFile);
     
     auto levelData = std::make_unique<LevelData>();
-    std::ifstream file(filename);
+    std::ifstream file(foundPath);
     
     if (!file.is_open()) {
         std::cerr << "Failed to load level file: " << filename << std::endl;
@@ -312,61 +352,80 @@ LevelData ResourceManager::createTestLevel() {
         {1, 1, 1, 1, 1, 1, 1, 1}
     };
     
-    // Пути к ресурсам для тестового уровня
-    std::vector<std::string> possibleTexturePaths = {
-        "resources/textures/surfaces/",
-        "../resources/textures/surfaces/", 
-        "../../resources/textures/surfaces/",
-        "../../../resources/textures/surfaces/",
-        "textures/surfaces/",
-        "../textures/surfaces/"
-    };
+    // Регистрируем стандартные пути
+    level.textures[Textures::BRICKS] = "textures/surfaces/bricks.png";
+    level.textures[Textures::BOARDS] = "textures/surfaces/boards.png";
+    level.textures[Textures::PARQUET] = "textures/surfaces/parquet.png";
     
-    std::vector<std::string> possibleMusicPaths = {
-        "resources/sounds/music/",
-        "../resources/sounds/music/",
-        "../../resources/sounds/music/", 
-        "../../../resources/sounds/music/",
-        "sounds/music/",
-        "../sounds/music/"
-    };
-    
-    // Поиск текстур
-    for (const auto& path : possibleTexturePaths) {
-        std::string bricksPath = path + "bricks.png";
-        if (fs::exists(bricksPath)) {
-            level.textures[Textures::BRICKS] = bricksPath;
-            level.textures[Textures::BOARDS] = path + "boards.png";
-            level.textures[Textures::PARQUET] = path + "parquet.png";
-            break;
-        }
-    }
-    
-    // Поиск музыки
-    for (const auto& path : possibleMusicPaths) {
-        std::vector<std::string> possibleMusicFiles = {
-            "Adrian'sAsleep.mid"
-        };
-        
-        for (const auto& musicFile : possibleMusicFiles) {
-            std::string musicPath = path + musicFile;
-            if (fs::exists(musicPath)) {
-                level.backgroundMusic = musicPath;
-                std::cout << "Found music file: " << musicPath << std::endl;
-                break;
-            }
-        }
-        
-        if (!level.backgroundMusic.empty()) {
-            break;
-        }
-    }
+    // Музыка
+    level.backgroundMusic = Music::ADRIANS_ASLEEP;
     
     // Стартовая позиция игрока
     level.playerStartPosition = sf::Vector2f(1.5f, 1.5f);
     level.playerStartDirection = sf::Vector2f(-1.0f, 0.0f);
     
     return level;
+}
+
+// Метод для массовой загрузки
+bool ResourceManager::loadResourceBatch(const std::vector<std::pair<std::string, std::string>>& resources) {
+    bool allLoaded = true;
+    
+    for (const auto& [name, path] : resources) {
+        bool loaded = false;
+        
+        // Определяем тип ресурса по расширению файла
+        std::string extension = getFileExtension(path);
+        
+        if (extension == "ttf" || extension == "otf") {
+            // Шрифты
+            loaded = loadFont(name, path);
+        } 
+        else if (extension == "wav" || extension == "ogg" || extension == "flac") {
+            // Звуки
+            loaded = loadSound(name, path);
+        }
+        else if (extension == "png" || extension == "jpg" || extension == "jpeg" || extension == "bmp") {
+            // Текстуры
+            loaded = loadTexture(name, path);
+        }
+        else if (extension == "mid" || extension == "midi") {
+            // MIDI файлы
+            loaded = loadMIDI(name, path);
+        }
+        else if (extension == "sf2") {
+            // SoundFont
+            loaded = loadSoundFont(name, path);
+        }
+        else {
+            // Пробуем определить по содержимому
+            if (!loadTexture(name, path) && !loadSound(name, path) && !loadMusic(name, path) && !loadFont(name, path)) {
+                std::cerr << "Failed to load resource (unknown type): " << name << " from " << path << std::endl;
+                allLoaded = false;
+            } else {
+                loaded = true;
+            }
+        }
+        
+        if (!loaded) {
+            std::cerr << "Failed to load resource: " << name << " from " << path << std::endl;
+            allLoaded = false;
+        }
+    }
+    
+    return allLoaded;
+}
+
+// Вспомогательный метод для получения расширения файла
+std::string ResourceManager::getFileExtension(const std::string& filename) const {
+    size_t dotPos = filename.find_last_of(".");
+    if (dotPos != std::string::npos) {
+        std::string ext = filename.substr(dotPos + 1);
+        // Приводим к нижнему регистру для сравнения
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        return ext;
+    }
+    return "";
 }
 
 void ResourceManager::clear() {

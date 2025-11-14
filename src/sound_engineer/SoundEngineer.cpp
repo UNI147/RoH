@@ -1,6 +1,7 @@
 #include "SoundEngineer.h"
 #include <iostream>
 #include <algorithm>
+#include <random>
 #include "resource_manager/ResourceManager.h"
 #include "resource_manager/MusicNames.h"
 #include "resource_manager/SoundNames.h"
@@ -31,7 +32,8 @@ namespace FluidSynthUtils {
 };
 
 // Конструктор SoundEngineer
-SoundEngineer::SoundEngineer() {
+SoundEngineer::SoundEngineer() 
+    : randomGenerator_(std::random_device{}()) {
 #ifndef NO_FLUIDSYNTH
     settings_ = nullptr;
     synth_ = nullptr;
@@ -60,6 +62,13 @@ SoundEngineer::~SoundEngineer() {
         settings_ = nullptr;
     }
 #endif
+}
+
+// ДОБАВЛЯЕМ НЕДОСТАЮЩИЙ МЕТОД
+void SoundEngineer::setupRandomSound(RandomSound& sound) {
+    std::uniform_real_distribution<float> dist(sound.minDelay, sound.maxDelay);
+    sound.nextPlayTime = dist(randomGenerator_);
+    sound.timer = 0.0f;
 }
 
 bool SoundEngineer::initializeFluidSynth(const std::string& soundFontName) {
@@ -142,28 +151,30 @@ bool SoundEngineer::initializeFluidSynth(const std::string& soundFontName) {
     if (rm.hasSoundFont(soundFontName)) {
         try {
             const std::string& soundFontPath = rm.getSoundFontPath(soundFontName);
+            std::cout << "Attempting to load SoundFont from: " << soundFontPath << std::endl;
+            
             int fontId = fluid_synth_sfload(synth_, soundFontPath.c_str(), 1);
             if (fontId != -1) {
-                std::cout << "Successfully loaded SoundFont: " << soundFontPath << " (ID: " << fontId << ")" << std::endl;
-                
-                // Предварительная инициализация синтезатора
-                fluid_synth_program_select(synth_, 0, fontId, 0, 0);
-                
-                // УСИЛЕНИЕ
-                fluid_synth_set_gain(synth_, 0.5f);
-                
-                // Предварительный рендеринг для прогрева
-                fluid_synth_noteon(synth_, 0, 60, 80);
-                fluid_synth_noteoff(synth_, 0, 60);
-                
+                std::cout << "Successfully loaded SoundFont with ID: " << fontId << std::endl;
             } else {
-                std::cerr << "Failed to load SoundFont file: " << soundFontPath << std::endl;
+                std::cerr << "FluidSynth failed to load SoundFont file: " << soundFontPath << std::endl;
+                // Проверим права доступа к файлу
+                FILE* test = fopen(soundFontPath.c_str(), "rb");
+                if (test) {
+                    std::cout << "File exists and is readable" << std::endl;
+                    fclose(test);
+                } else {
+                    std::cerr << "Cannot open SoundFont file for reading" << std::endl;
+                }
+                return false;
             }
         } catch (const std::exception& e) {
             std::cerr << "Error loading SoundFont: " << e.what() << std::endl;
+            return false;
         }
     } else {
-        std::cerr << "SoundFont not found in ResourceManager: " << soundFontName << std::endl;
+        std::cerr << "SoundFont not registered in ResourceManager: " << soundFontName << std::endl;
+        return false;
     }
     
     // Создаем аудиодрайвер
@@ -210,6 +221,77 @@ void SoundEngineer::setMIDIVolume(float volume) {
 #endif
 }
 
+// Система фоновых звуков
+void SoundEngineer::startAmbience(const std::string& soundName, float volume) {
+    auto& rm = ResourceManager::getInstance();
+    
+    if (rm.hasSound(soundName)) {
+        try {
+            ambienceSound_ = std::make_unique<sf::Sound>();
+            ambienceSound_->setBuffer(rm.getSound(soundName));
+            ambienceSound_->setLoop(true);
+            ambienceSound_->setVolume(volume);
+            ambienceSound_->play();
+            ambienceVolume_ = volume;
+            
+            std::cout << "Started ambience sound: " << soundName << " at volume " << volume << std::endl;
+        } catch (const std::exception& e) {
+            std::cerr << "Error starting ambience sound: " << e.what() << std::endl;
+        }
+    } else {
+        std::cerr << "Ambience sound not found: " << soundName << std::endl;
+    }
+}
+
+void SoundEngineer::stopAmbience() {
+    if (ambienceSound_) {
+        ambienceSound_->stop();
+        ambienceSound_.reset();
+    }
+}
+
+void SoundEngineer::setAmbienceVolume(float volume) {
+    ambienceVolume_ = volume;
+    if (ambienceSound_) {
+        ambienceSound_->setVolume(volume);
+    }
+}
+
+// Система случайных звуков
+void SoundEngineer::addRandomSound(const std::string& soundName, float minDelay, float maxDelay, float volume) {
+    RandomSound newSound;
+    newSound.name = soundName;
+    newSound.minDelay = minDelay;
+    newSound.maxDelay = maxDelay;
+    newSound.volume = volume;
+    
+    setupRandomSound(newSound);
+    randomSounds_.push_back(newSound);
+    
+    std::cout << "Added random sound: " << soundName 
+              << " with delay " << minDelay << "-" << maxDelay 
+              << "s, volume " << volume << std::endl;
+}
+
+void SoundEngineer::clearRandomSounds() {
+    randomSounds_.clear();
+}
+
+void SoundEngineer::updateRandomSounds(float deltaTime) {
+    for (auto& sound : randomSounds_) {
+        sound.timer += deltaTime;
+        
+        if (sound.timer >= sound.nextPlayTime) {
+            // Воспроизводим звук
+            playSound(sound.name, sound.volume, 1.0f);
+            
+            // Сбрасываем таймер и устанавливаем следующее время воспроизведения
+            sound.timer = 0.0f;
+            setupRandomSound(sound);
+        }
+    }
+}
+
 void SoundEngineer::updateInitialization(float deltaTime) {
     if (audioReady_) return;
     
@@ -229,6 +311,9 @@ void SoundEngineer::updateInitialization(float deltaTime) {
         }
         #endif
     }
+    
+    // Обновляем случайные звуки даже во время инициализации
+    updateRandomSounds(deltaTime);
 }
 
 void SoundEngineer::playMIDI(const std::string& name, bool loop) {
@@ -350,24 +435,42 @@ void SoundEngineer::stopAllSounds() {
         sound->stop();
     }
     activeSounds_.clear();
+    
+    for (auto& echo : echoSounds_) {
+        echo.sound->stop();
+    }
+    echoSounds_.clear();
 }
 
 // Система шагов
 void SoundEngineer::updateFootsteps(bool isMoving, bool isRunning, float deltaTime) {
     if (!footstepsEnabled_) return;
     
+    // Обновляем систему эха
+    updateEchoSounds(deltaTime);
+    
     if (isMoving) {
         stepTimer_ -= deltaTime;
         
         if (stepTimer_ <= 0.0f) {
             // Определяем интервал между шагами
-            float stepInterval = baseStepInterval_;
+            float stepInterval = isRunning ? baseStepInterval_ * 0.6f : baseStepInterval_;
+            
+            // Параметры в зависимости от типа движения
+            float volume, pitch, pan;
+            
             if (isRunning) {
-                stepInterval *= 0.6f;
+                volume = leftStep_ ? 85.0f : 75.0f;
+                pitch = leftStep_ ? 1.15f : 1.1f;
+                pan = leftStep_ ? -0.4f : 0.4f;
+            } else {
+                volume = leftStep_ ? 65.0f : 55.0f;
+                pitch = leftStep_ ? 0.95f : 1.0f;
+                pan = leftStep_ ? -0.2f : 0.2f;
             }
             
-            // Воспроизводим звук шага
-            playStepSound(leftStep_ ? 100.0f : 50.0f, isRunning ? 1.2f : 1.0f);
+            // Воспроизводим звук шага с правильным панорамированием
+            playStepSound(volume, pitch, pan);
             
             // Чередуем ноги
             leftStep_ = !leftStep_;
@@ -377,9 +480,11 @@ void SoundEngineer::updateFootsteps(bool isMoving, bool isRunning, float deltaTi
         }
     } else {
         stepTimer_ = 0.0f;
+        // Сбрасываем чередование ног при остановке
+        leftStep_ = true;
     }
     
-    // Очищаем завершенные звуки
+    // Очищаем завершенные звуки (кроме ambience и echo)
     activeSounds_.erase(
         std::remove_if(activeSounds_.begin(), activeSounds_.end(),
             [](const std::unique_ptr<sf::Sound>& sound) {
@@ -387,34 +492,100 @@ void SoundEngineer::updateFootsteps(bool isMoving, bool isRunning, float deltaTi
             }),
         activeSounds_.end()
     );
+    
+    // Обновляем случайные звуки
+    updateRandomSounds(deltaTime);
 }
 
-void SoundEngineer::setFootstepsEnabled(bool enabled) {
-    footstepsEnabled_ = enabled;
-    if (!enabled) {
-        stepTimer_ = 0.0f;
+// Новая реализация playStepSound с панорамированием и эхом
+void SoundEngineer::playStepSound(float volume, float pitch, float pan) {
+    auto& rm = ResourceManager::getInstance();
+    
+    if (rm.hasSound(Sounds::STEP)) {
+        try {
+            // Основной звук шага
+            auto mainSound = std::make_unique<sf::Sound>();
+            mainSound->setBuffer(rm.getSound(Sounds::STEP));
+            mainSound->setVolume(volume);
+            mainSound->setPitch(pitch);
+            
+            // Устанавливаем панорамирование
+            #if SFML_VERSION_MAJOR >= 2 && SFML_VERSION_MINOR >= 5
+            mainSound->setPosition(pan, 0.0f, 0.0f);
+            mainSound->setMinDistance(1.0f);
+            mainSound->setAttenuation(0.5f);
+            #else
+            // Альтернатива для старых версий SFML
+            mainSound->setPosition(pan * 10.0f, 0.0f, 0.0f);
+            #endif
+            
+            mainSound->setRelativeToListener(true);
+            mainSound->play();
+            activeSounds_.push_back(std::move(mainSound));
+            
+            // Добавляем эхо-эффект с задержкой
+            addEcho(rm.getSound(Sounds::STEP), volume * 0.3f, pitch * 0.8f, pan, 0.15f);
+            
+            // Второе, более тихое эхо
+            addEcho(rm.getSound(Sounds::STEP), volume * 0.15f, pitch * 0.7f, pan, 0.3f);
+            
+        } catch (const std::exception& e) {
+            std::cerr << "Error playing step sound: " << e.what() << std::endl;
+        }
+    } else {
+        std::cerr << "Step sound not found: " << Sounds::STEP << std::endl;
     }
 }
 
-void SoundEngineer::playStepSound(float volume, float pitch) {
-    auto& rm = ResourceManager::getInstance();
+// Метод для добавления эха
+void SoundEngineer::addEcho(const sf::SoundBuffer& buffer, float baseVolume, float basePitch, float pan, float delay) {
+    EchoSound echo;
+    echo.sound = std::make_unique<sf::Sound>();
+    echo.sound->setBuffer(buffer);
+    echo.sound->setVolume(0.0f);
+    echo.sound->setPitch(basePitch);
+    echo.delay = delay;
+    echo.volumeMultiplier = baseVolume;
+    echo.pitchMultiplier = basePitch;
+    echo.pan = pan;
     
-    // Основной звук шага
-    if (rm.hasSound(Sounds::STEP)) {
-        auto mainSound = std::make_unique<sf::Sound>();
-        mainSound->setBuffer(rm.getSound(Sounds::STEP));
-        mainSound->setVolume(volume);
-        mainSound->setPitch(pitch);
-        mainSound->play();
-        activeSounds_.push_back(std::move(mainSound));
+    // Настраиваем позиционирование
+    #if SFML_VERSION_MAJOR >= 2 && SFML_VERSION_MINOR >= 5
+    echo.sound->setPosition(pan, 0.0f, 0.0f);
+    echo.sound->setMinDistance(1.0f);
+    echo.sound->setAttenuation(0.3f);
+    #else
+    echo.sound->setPosition(pan * 10.0f, 0.0f, 0.0f);
+    #endif
+    
+    echo.sound->setRelativeToListener(true);
+    echo.sound->play();
+    
+    echoSounds_.push_back(std::move(echo));
+}
+
+// Метод для обновления системы эха
+void SoundEngineer::updateEchoSounds(float deltaTime) {
+    for (auto it = echoSounds_.begin(); it != echoSounds_.end(); ) {
+        auto& echo = *it;
         
-        // Эхо-эффект (воспроизводим с небольшой задержкой)
-        auto echoSound = std::make_unique<sf::Sound>();
-        echoSound->setBuffer(rm.getSound(Sounds::STEP));
-        echoSound->setVolume(volume * 0.5f);
-        echoSound->setPitch(pitch * 0.75f);
-        echoSound->setPlayingOffset(sf::milliseconds(80));
-        echoSound->play();
-        activeSounds_.push_back(std::move(echoSound));
+        if (echo.sound->getStatus() == sf::Sound::Stopped) {
+            it = echoSounds_.erase(it);
+            continue;
+        }
+        
+        // Уменьшаем задержку
+        echo.delay -= deltaTime;
+        
+        if (echo.delay <= 0.0f) {
+            // Когда задержка прошла, устанавливаем полную громкость
+            echo.sound->setVolume(echo.volumeMultiplier);
+        } else if (echo.delay < 0.1f) {
+            // Плавное нарастание громкости в последние 0.1 секунды
+            float fadeIn = 1.0f - (echo.delay / 0.1f);
+            echo.sound->setVolume(echo.volumeMultiplier * fadeIn);
+        }
+        
+        ++it;
     }
 }

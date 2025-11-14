@@ -10,6 +10,11 @@ Game::Game(sf::RenderWindow& window)
     // Инициализация ресурсов
     initializeResources();
     
+    // Инициализация звуковой системы
+    if (!soundEngineer_.initializeFluidSynth("default")) {
+        std::cerr << "Warning: FluidSynth initialization failed, continuing without MIDI" << std::endl;
+    }
+    
     // Настройка элементов интерфейса загрузки
     setupLoadingScreen();
     
@@ -27,16 +32,29 @@ Game::Game(sf::RenderWindow& window)
 void Game::setupLoadingScreen() {
     auto& rm = ResourceManager::getInstance();
     
-    // Используем основной шрифт или fallback
-    if (rm.hasFont(Fonts::SPECIAL_ELITE)) {
+    // Используем GothicRus для заголовка и SpecialElite для текста
+    if (rm.hasFont(Fonts::GOTHIC_RUS)) {
+        loadingTitle_.setFont(rm.getFont(Fonts::GOTHIC_RUS));
+        std::cout << "Using GothicRus font for loading title" << std::endl;
+    } else if (rm.hasFont(Fonts::SPECIAL_ELITE)) {
         loadingTitle_.setFont(rm.getFont(Fonts::SPECIAL_ELITE));
-        loadingText_.setFont(rm.getFont(Fonts::SPECIAL_ELITE));
+        std::cout << "Using SpecialElite font for loading title (fallback)" << std::endl;
     } else if (rm.hasFont(Fonts::SYSTEM_FALLBACK)) {
         loadingTitle_.setFont(rm.getFont(Fonts::SYSTEM_FALLBACK));
+        std::cout << "Using system fallback font for loading title" << std::endl;
+    } else {
+        std::cerr << "No fonts available for loading screen title!" << std::endl;
+    }
+    
+    // Для основного текста используем SpecialElite
+    if (rm.hasFont(Fonts::SPECIAL_ELITE)) {
+        loadingText_.setFont(rm.getFont(Fonts::SPECIAL_ELITE));
+    } else if (rm.hasFont(Fonts::GOTHIC_RUS)) {
+        loadingText_.setFont(rm.getFont(Fonts::GOTHIC_RUS));
+    } else if (rm.hasFont(Fonts::SYSTEM_FALLBACK)) {
         loadingText_.setFont(rm.getFont(Fonts::SYSTEM_FALLBACK));
     } else {
-        // Если шрифты не загружены, это критическая ошибка
-        std::cerr << "No fonts available for loading screen!" << std::endl;
+        std::cerr << "No fonts available for loading text!" << std::endl;
     }
     
     // Настройка текстовых элементов
@@ -60,56 +78,31 @@ void Game::setupLoadingScreen() {
 
 void Game::initializeResources() {
     auto& rm = ResourceManager::getInstance();
+    rm.setBasePath("resources/");
     
-    // Загрузка шрифтов
-    std::vector<std::pair<std::string, std::string>> fontPaths = {
-        {Fonts::SPECIAL_ELITE, "resources/SpecialElite.ttf"},
-        {Fonts::GOTHIC_RUS, "resources/GothicRus.ttf"}
-    };
-    
-    for (const auto& [name, path] : fontPaths) {
-        if (!rm.loadFont(name, path)) {
-            std::cerr << "Failed to load font: " << name << " from " << path << std::endl;
-        }
+    // Загружаем шрифты - сначала GothicRus для заголовка
+    if (!rm.loadFont(Fonts::GOTHIC_RUS, "GothicRus.ttf")) {
+        std::cerr << "Failed to load Gothic font!" << std::endl;
     }
     
-    // Загрузка системного fallback шрифта
+    if (!rm.loadFont(Fonts::SPECIAL_ELITE, "SpecialElite.ttf")) {
+        std::cerr << "CRITICAL: Failed to load main font!" << std::endl;
+    }
+    
+    // Остальные ресурсы без изменений...
+    rm.loadSound(Sounds::STEP, "sounds/effects/step.wav");
+    rm.loadSound(Sounds::AMBIENCE_LOOP, "sounds/effects/ambienceloop.wav");
+    rm.loadSound(Sounds::DROPS, "sounds/effects/drops.wav");
+    
+    rm.loadSoundFont("default", "OPL3SB.sf2");
+    rm.loadMIDI(Music::ADRIANS_ASLEEP, "sounds/music/Adrian'sAsleep.mid");
+    
+    // Fallback только если основные шрифты не загрузились
     if (!rm.hasFont(Fonts::SPECIAL_ELITE) && !rm.hasFont(Fonts::GOTHIC_RUS)) {
-        if (rm.loadFont(Fonts::SYSTEM_FALLBACK, "C:/Windows/Fonts/arial.ttf")) {
-            std::cout << "Using system fallback font" << std::endl;
-        } else {
-            std::cerr << "Failed to load system fallback font!" << std::endl;
-        }
+        #ifdef _WIN32
+        rm.loadFont(Fonts::SYSTEM_FALLBACK, "C:/Windows/Fonts/arial.ttf");
+        #endif
     }
-    
-    // Загрузка SoundFont
-    rm.loadSoundFont("default", "resources/OPL3SB.sf2");
-    
-    // Загрузка MIDI файлов
-    std::vector<std::string> midiPaths = {
-        "resources/sounds/music/Adrian'sAsleep.mid",
-        "resources/sounds/music/adrians_asleep.mid",
-        "resources/sounds/music/AdriansAsleep.mid"
-    };
-    
-    bool midiLoaded = false;
-    for (const auto& path : midiPaths) {
-        if (rm.loadMIDI(Music::ADRIANS_ASLEEP, path)) {
-            midiLoaded = true;
-            std::cout << "MIDI loaded: " << path << std::endl;
-            break;
-        }
-    }
-    
-    if (!midiLoaded) {
-        std::cerr << "Failed to load MIDI file with any path variant" << std::endl;
-    }
-    
-    // Загрузка звуков
-    rm.loadSound(Sounds::STEP, "resources/sounds/effects/step.wav");
-    
-    // Инициализация звукового движка
-    soundEngineer_.initializeFluidSynth("default");
 }
 
 void Game::updateLoadingScreen(float progress) {
@@ -246,6 +239,7 @@ void Game::update() {
         // Проверяем, готовы ли начать игру
         if (soundEngineer_.isAudioReady()) {
             gameReady_ = true;
+            startAmbientSounds(); // Запускаем фоновые звуки
             playBackgroundMusic();
             std::cout << "Ready to start" << std::endl;
         }
@@ -264,6 +258,14 @@ void Game::update() {
     
     // Обновляем звуки шагов
     soundEngineer_.updateFootsteps(isMoving, isRunning, deltaTime);
+}
+
+void Game::startAmbientSounds() {
+    // Запускаем фоновый звук ambienceloop
+    soundEngineer_.startAmbience(Sounds::AMBIENCE_LOOP, 25.0f);
+    
+    // Добавляем случайные звуки с интервалом 15-45 секунд
+    soundEngineer_.addRandomSound(Sounds::DROPS, 15.0f, 45.0f, 40.0f);
 }
 
 void Game::render() {
@@ -290,15 +292,26 @@ void Game::playBackgroundMusic() {
         
         for (const auto& name : possibleNames) {
             if (ResourceManager::getInstance().hasMIDI(name)) {
+                std::cout << "Attempting to play MIDI: " << name << std::endl;
                 soundEngineer_.playMIDI(name, true);
-                soundEngineer_.setMusicVolume(100.0f);
+                soundEngineer_.setMusicVolume(25.0f);
                 std::cout << "Playing background music: " << name << std::endl;
                 return;
             }
         }
         
+        // Если не нашли по стандартным именам, пробуем путь из уровня
         std::cout << "Trying to play music from level path: " << currentLevel_.backgroundMusic << std::endl;
         soundEngineer_.playMIDI(currentLevel_.backgroundMusic, true);
+        soundEngineer_.setMusicVolume(25.0f);
+    } else {
+        std::cout << "Cannot play background music - audio not ready or no music specified" << std::endl;
+        if (!soundEngineer_.isAudioReady()) {
+            std::cout << "Audio system not ready" << std::endl;
+        }
+        if (currentLevel_.backgroundMusic.empty()) {
+            std::cout << "No background music specified in level" << std::endl;
+        }
     }
 }
 
@@ -339,25 +352,15 @@ void Game::loadLevel() {
 void Game::loadSounds() {
     auto& rm = ResourceManager::getInstance();
     
-    // Загружаем звук шагов
     if (!rm.hasSound(Sounds::STEP)) {
-        std::vector<std::string> stepPaths = {
-            "resources/sounds/effects/step.wav",
-            "../resources/sounds/effects/step.wav",
-            "../../resources/sounds/effects/step.wav"
-        };
-        
-        bool stepLoaded = false;
-        for (const auto& path : stepPaths) {
-            if (rm.loadSound(Sounds::STEP, path)) {
-                stepLoaded = true;
-                std::cout << "Step sound loaded from: " << path << std::endl;
-                break;
-            }
-        }
-        
-        if (!stepLoaded) {
-            std::cerr << "Failed to load step sound effect!" << std::endl;
-        }
+        std::cerr << "Critical error: Step sound not loaded!" << std::endl;
+    }
+    
+    if (!rm.hasSound(Sounds::AMBIENCE_LOOP)) {
+        std::cerr << "Warning: Ambience sound not loaded" << std::endl;
+    }
+    
+    if (!rm.hasSound(Sounds::DROPS)) {
+        std::cerr << "Warning: Drops sound not loaded" << std::endl;
     }
 }

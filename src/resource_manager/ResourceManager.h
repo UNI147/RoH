@@ -56,7 +56,15 @@ public:
     
     // Создание тестового уровня
     LevelData createTestLevel();
+
+    std::string findResourceFile(const std::string& filename) const;
+    bool loadResourceBatch(const std::vector<std::pair<std::string, std::string>>& resources);
     
+    void setBasePath(const std::string& path) { basePath_ = path; }
+    std::string getFullPath(const std::string& relativePath) const {
+        return basePath_ + relativePath;
+    }
+        
     // Очистка всех ресурсов
     void clear();
 
@@ -79,6 +87,11 @@ private:
     // Вспомогательные методы для парсинга уровня
     bool parseResourceLine(const std::string& line, LevelData& level);
     bool parsePlayerPosition(const std::string& line, LevelData& level);
+    
+    // Вспомогательный метод для получения расширения файла
+    std::string getFileExtension(const std::string& filename) const;
+    
+    std::string basePath_ = "resources/";
     
     // Запрещаем копирование
     ResourceManager(const ResourceManager&) = delete;
