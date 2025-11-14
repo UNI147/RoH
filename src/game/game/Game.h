@@ -19,7 +19,6 @@ private:
     sf::Clock clock_;
     
     // Системы игры
-    MapLoader mapLoader_;
     RayCaster rayCaster_;
     std::unique_ptr<Renderer> renderer_;
     InputHandler inputHandler_;
@@ -27,11 +26,10 @@ private:
     
     // Состояние игры
     PlayerState player_;
-    LevelResources currentLevel_;
+    LevelData currentLevel_;
     
     // Состояние инициализации
     bool gameReady_ = false;
-    sf::Font loadingFont_;
     sf::Text loadingText_;
     
     // Элементы интерфейса загрузки
@@ -43,6 +41,7 @@ private:
     void loadLevel();
     void loadSounds();
     void initializeResources();
+    void setupLoadingScreen();
     void playBackgroundMusic();
     void renderLoadingScreen();
     void updateLoadingScreen(float progress);

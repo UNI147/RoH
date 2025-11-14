@@ -2,24 +2,49 @@
 #include <iostream>
 #include "resource_manager/MusicNames.h"
 #include "resource_manager/SoundNames.h"
+#include "resource_manager/FontNames.h"
 
 Game::Game(sf::RenderWindow& window) 
     : window_(window) {
     
-    // Инициализация шрифта для экрана загрузки
-    if (!loadingFont_.loadFromFile("resources/SpecialElite.ttf")) {
-        // Если шрифт не загружен, используем системный
-        loadingFont_.loadFromFile("C:/Windows/Fonts/arial.ttf");
-    }
+    // Инициализация ресурсов
+    initializeResources();
     
     // Настройка элементов интерфейса загрузки
-    loadingTitle_.setFont(loadingFont_);
+    setupLoadingScreen();
+    
+    loadLevel();
+    loadSounds();
+    
+    renderer_ = std::make_unique<Renderer>(window_);
+    
+    // Инициализация игрока из данных уровня
+    player_.position = currentLevel_.playerStartPosition;
+    player_.direction = currentLevel_.playerStartDirection;
+    player_.plane = sf::Vector2f(0.0f, 0.66f);
+}
+
+void Game::setupLoadingScreen() {
+    auto& rm = ResourceManager::getInstance();
+    
+    // Используем основной шрифт или fallback
+    if (rm.hasFont(Fonts::SPECIAL_ELITE)) {
+        loadingTitle_.setFont(rm.getFont(Fonts::SPECIAL_ELITE));
+        loadingText_.setFont(rm.getFont(Fonts::SPECIAL_ELITE));
+    } else if (rm.hasFont(Fonts::SYSTEM_FALLBACK)) {
+        loadingTitle_.setFont(rm.getFont(Fonts::SYSTEM_FALLBACK));
+        loadingText_.setFont(rm.getFont(Fonts::SYSTEM_FALLBACK));
+    } else {
+        // Если шрифты не загружены, это критическая ошибка
+        std::cerr << "No fonts available for loading screen!" << std::endl;
+    }
+    
+    // Настройка текстовых элементов
     loadingTitle_.setString("RoH Demo");
     loadingTitle_.setCharacterSize(36);
     loadingTitle_.setFillColor(sf::Color::Red);
     loadingTitle_.setStyle(sf::Text::Bold);
     
-    loadingText_.setFont(loadingFont_);
     loadingText_.setCharacterSize(18);
     loadingText_.setFillColor(sf::Color(128, 128, 128));
     
@@ -31,17 +56,60 @@ Game::Game(sf::RenderWindow& window)
     
     progressBar_.setSize(sf::Vector2f(0.0f, 21.0f));
     progressBar_.setFillColor(sf::Color::Red);
+}
+
+void Game::initializeResources() {
+    auto& rm = ResourceManager::getInstance();
     
-    initializeResources();
-    loadLevel();
-    loadSounds();
+    // Загрузка шрифтов
+    std::vector<std::pair<std::string, std::string>> fontPaths = {
+        {Fonts::SPECIAL_ELITE, "resources/SpecialElite.ttf"},
+        {Fonts::GOTHIC_RUS, "resources/GothicRus.ttf"}
+    };
     
-    renderer_ = std::make_unique<Renderer>(window_);
+    for (const auto& [name, path] : fontPaths) {
+        if (!rm.loadFont(name, path)) {
+            std::cerr << "Failed to load font: " << name << " from " << path << std::endl;
+        }
+    }
     
-    // Инициализация игрока из данных уровня
-    player_.position = currentLevel_.playerStartPosition;
-    player_.direction = currentLevel_.playerStartDirection;
-    player_.plane = sf::Vector2f(0.0f, 0.66f);
+    // Загрузка системного fallback шрифта
+    if (!rm.hasFont(Fonts::SPECIAL_ELITE) && !rm.hasFont(Fonts::GOTHIC_RUS)) {
+        if (rm.loadFont(Fonts::SYSTEM_FALLBACK, "C:/Windows/Fonts/arial.ttf")) {
+            std::cout << "Using system fallback font" << std::endl;
+        } else {
+            std::cerr << "Failed to load system fallback font!" << std::endl;
+        }
+    }
+    
+    // Загрузка SoundFont
+    rm.loadSoundFont("default", "resources/OPL3SB.sf2");
+    
+    // Загрузка MIDI файлов
+    std::vector<std::string> midiPaths = {
+        "resources/sounds/music/Adrian'sAsleep.mid",
+        "resources/sounds/music/adrians_asleep.mid",
+        "resources/sounds/music/AdriansAsleep.mid"
+    };
+    
+    bool midiLoaded = false;
+    for (const auto& path : midiPaths) {
+        if (rm.loadMIDI(Music::ADRIANS_ASLEEP, path)) {
+            midiLoaded = true;
+            std::cout << "MIDI loaded: " << path << std::endl;
+            break;
+        }
+    }
+    
+    if (!midiLoaded) {
+        std::cerr << "Failed to load MIDI file with any path variant" << std::endl;
+    }
+    
+    // Загрузка звуков
+    rm.loadSound(Sounds::STEP, "resources/sounds/effects/step.wav");
+    
+    // Инициализация звукового движка
+    soundEngineer_.initializeFluidSynth("default");
 }
 
 void Game::updateLoadingScreen(float progress) {
@@ -247,20 +315,31 @@ void Game::handleEvents() {
 
 void Game::loadLevel() {
     std::cout << "Loading level resources..." << std::endl;
-    currentLevel_ = mapLoader_.loadLevel("resources/levels/test_level.roh");
     
-    if (currentLevel_.grid.empty()) {
+    if (MapLoader::loadLevel("test_level", "resources/levels/test_level.roh")) {
+        currentLevel_ = MapLoader::getLevel("test_level");
+        std::cout << "Level loaded successfully!" << std::endl;
+        
+        // Загружаем текстуры из данных уровня
+        auto& rm = ResourceManager::getInstance();
+        for (const auto& [name, path] : currentLevel_.textures) {
+            if (!rm.loadTexture(name, path)) {
+                std::cerr << "Failed to load texture: " << name << " from " << path << std::endl;
+            } else {
+                std::cout << "Successfully loaded texture: " << name << std::endl;
+            }
+        }
+    } else {
         std::cout << "Using test level..." << std::endl;
-        currentLevel_ = mapLoader_.createTestLevel();
+        auto& rm = ResourceManager::getInstance();
+        currentLevel_ = rm.createTestLevel();
     }
-    
-    std::cout << "Level loaded successfully!" << std::endl;
 }
 
 void Game::loadSounds() {
     auto& rm = ResourceManager::getInstance();
     
-    // Загружаем звук шагов (если еще не загружен в initializeResources)
+    // Загружаем звук шагов
     if (!rm.hasSound(Sounds::STEP)) {
         std::vector<std::string> stepPaths = {
             "resources/sounds/effects/step.wav",
@@ -281,37 +360,4 @@ void Game::loadSounds() {
             std::cerr << "Failed to load step sound effect!" << std::endl;
         }
     }
-}
-
-void Game::initializeResources() {
-    auto& rm = ResourceManager::getInstance();
-    
-    // Загрузка SoundFont
-    rm.loadSoundFont("default", "resources/OPL3SB.sf2");
-    
-    // Загрузка MIDI файлов - пробуем разные варианты имен
-    std::vector<std::string> midiPaths = {
-        "resources/sounds/music/Adrian'sAsleep.mid",
-        "resources/sounds/music/adrians_asleep.mid",
-        "resources/sounds/music/AdriansAsleep.mid"
-    };
-    
-    bool midiLoaded = false;
-    for (const auto& path : midiPaths) {
-        if (rm.loadMIDI(Music::ADRIANS_ASLEEP, path)) {
-            midiLoaded = true;
-            std::cout << "MIDI loaded: " << path << std::endl;
-            break;
-        }
-    }
-    
-    if (!midiLoaded) {
-        std::cerr << "Failed to load MIDI file with any path variant" << std::endl;
-    }
-    
-    // Загрузка звуков
-    rm.loadSound(Sounds::STEP, "resources/sounds/effects/step.wav");
-    
-    // Инициализация звукового движка
-    soundEngineer_.initializeFluidSynth("default");
 }

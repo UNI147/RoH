@@ -5,20 +5,14 @@
 #include "resource_manager/ResourceManager.h"
 #include "sound_engineer/SoundEngineer.h"
 
-struct LevelResources {
-    std::vector<std::vector<int>> grid;
-    std::unordered_map<std::string, std::string> textures;
-    std::string backgroundMusic;
-    sf::Vector2f playerStartPosition;
-    sf::Vector2f playerStartDirection;
-};
-
 class MapLoader {
 public:
-    LevelResources loadLevel(const std::string& filename);
-    LevelResources createTestLevel();
+    // Используем только статические методы
+    MapLoader() = default;
     
-private:
-    bool parseResourceLine(const std::string& line, LevelResources& resources);
-    bool parsePlayerPosition(const std::string& line, LevelResources& resources);
+    // Загружает уровень
+    static bool loadLevel(const std::string& levelName, const std::string& filename);
+    
+    // Получить загруженный уровень
+    static const LevelData& getLevel(const std::string& levelName);
 };

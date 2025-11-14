@@ -78,6 +78,7 @@ add_executable(game
     src/resource_manager/TextureNames.h
     src/resource_manager/MusicNames.h
     src/resource_manager/SoundNames.h
+    src/resource_manager/FontNames.h
 )
 
 # Определение для статической линковки
