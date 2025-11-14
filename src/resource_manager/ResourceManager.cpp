@@ -87,8 +87,66 @@ bool ResourceManager::hasSound(const std::string& name) const {
     return soundBuffers_.find(name) != soundBuffers_.end();
 }
 
+bool ResourceManager::loadMIDI(const std::string& name, const std::string& filename) {
+    // Проверяем существование файла
+    FILE* testFile = nullptr;
+    errno_t err = fopen_s(&testFile, filename.c_str(), "rb");
+    if (err != 0 || !testFile) {
+        std::cerr << "MIDI file not found: " << filename << " (error: " << err << ")" << std::endl;
+        return false;
+    }
+    fclose(testFile);
+    
+    midiFiles_[name] = filename;
+    std::cout << "Loaded MIDI: " << name << " from " << filename << std::endl;
+    return true;
+}
+
+const std::string& ResourceManager::getMIDIPath(const std::string& name) const {
+    auto it = midiFiles_.find(name);
+    if (it != midiFiles_.end()) {
+        return it->second;
+    }
+    
+    throw std::runtime_error("MIDI not found: " + name);
+}
+
+bool ResourceManager::hasMIDI(const std::string& name) const {
+    return midiFiles_.find(name) != midiFiles_.end();
+}
+
+bool ResourceManager::loadSoundFont(const std::string& name, const std::string& filename) {
+    // Проверяем существование файла
+    FILE* testFile = nullptr;
+    errno_t err = fopen_s(&testFile, filename.c_str(), "rb");
+    if (err != 0 || !testFile) {
+        std::cerr << "SoundFont file not found: " << filename << " (error: " << err << ")" << std::endl;
+        return false;
+    }
+    fclose(testFile);
+    
+    soundFonts_[name] = filename;
+    std::cout << "Loaded SoundFont: " << name << " from " << filename << std::endl;
+    return true;
+}
+
+const std::string& ResourceManager::getSoundFontPath(const std::string& name) const {
+    auto it = soundFonts_.find(name);
+    if (it != soundFonts_.end()) {
+        return it->second;
+    }
+    
+    throw std::runtime_error("SoundFont not found: " + name);
+}
+
+bool ResourceManager::hasSoundFont(const std::string& name) const {
+    return soundFonts_.find(name) != soundFonts_.end();
+}
+
 void ResourceManager::clear() {
     textures_.clear();
     musicTracks_.clear();
     soundBuffers_.clear();
+    midiFiles_.clear();
+    soundFonts_.clear();
 }

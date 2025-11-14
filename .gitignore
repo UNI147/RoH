@@ -29,4 +29,4 @@ Makefile
 *.local
 .env
 
-OPL3SB.sf2
+*.sf2

@@ -24,6 +24,16 @@ public:
     sf::SoundBuffer& getSound(const std::string& name);
     bool hasSound(const std::string& name) const;
     
+    // Загрузка MIDI файлов
+    bool loadMIDI(const std::string& name, const std::string& filename);
+    const std::string& getMIDIPath(const std::string& name) const;
+    bool hasMIDI(const std::string& name) const;
+    
+    // Загрузка SoundFont
+    bool loadSoundFont(const std::string& name, const std::string& filename);
+    const std::string& getSoundFontPath(const std::string& name) const;
+    bool hasSoundFont(const std::string& name) const;
+    
     // Очистка всех ресурсов
     void clear();
 
@@ -34,6 +44,10 @@ private:
     std::unordered_map<std::string, std::unique_ptr<sf::Texture>> textures_;
     std::unordered_map<std::string, std::unique_ptr<sf::Music>> musicTracks_;
     std::unordered_map<std::string, std::unique_ptr<sf::SoundBuffer>> soundBuffers_;
+    
+    // MIDI и SoundFont хранятся как пути к файлам
+    std::unordered_map<std::string, std::string> midiFiles_;
+    std::unordered_map<std::string, std::string> soundFonts_;
     
     // Запрещаем копирование
     ResourceManager(const ResourceManager&) = delete;

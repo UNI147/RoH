@@ -5,7 +5,6 @@
 #include <memory>
 #include <vector>
 
-// Условная компиляция для FluidSynth
 #ifndef NO_FLUIDSYNTH
 #include <fluidsynth.h>
 #endif
@@ -15,8 +14,10 @@ public:
     SoundEngineer();
     ~SoundEngineer();
     
+    // Инициализация FluidSynth с SoundFont
+    bool initializeFluidSynth(const std::string& soundFontName = "default");
+    
     // MIDI методы
-    bool loadMIDI(const std::string& name, const std::string& filename);
     void playMIDI(const std::string& name, bool loop = false);
     void stopMIDI();
     void setMIDIVolume(float volume);
@@ -34,6 +35,11 @@ public:
     void updateFootsteps(bool isMoving, bool isRunning, float deltaTime);
     void setFootstepsEnabled(bool enabled);
     
+    // Методы для проверки готовности
+    bool isAudioReady() const { return audioReady_; }
+    float getInitializationProgress() const { return initializationProgress_; }
+    void updateInitialization(float deltaTime);
+    
 private:
 #ifndef NO_FLUIDSYNTH
     fluid_settings_t* settings_;
@@ -43,8 +49,6 @@ private:
 #endif
     std::string currentMIDI_;
     
-    std::unordered_map<std::string, std::unique_ptr<sf::Music>> musicTracks_;
-    
     // Система звуковых эффектов
     std::vector<std::unique_ptr<sf::Sound>> activeSounds_;
     
@@ -53,6 +57,12 @@ private:
     float stepTimer_ = 0.0f;
     bool leftStep_ = true;
     float baseStepInterval_ = 0.5f;
+    
+    // Система инициализации аудио
+    bool audioReady_ = false;
+    float initializationTimer_ = 0.0f;
+    float initializationProgress_ = 0.0f;
+    const float REQUIRED_INIT_TIME_ = 3.0f;
     
     // Создание звука с эхом
     void playStepSound(float volume, float pitch);

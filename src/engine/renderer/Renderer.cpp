@@ -100,7 +100,8 @@ void Renderer::drawTexturedWallStrip(int x, int drawStart, int drawEnd, const Ra
     if (lineHeight <= 0) return;
     
     // Вычисление координаты текстуры по X
-    int texX = static_cast<int>(hit.wallX * static_cast<float>(wallTextureImage_.getSize().x));
+    int texWidth = static_cast<int>(wallTextureImage_.getSize().x);
+    int texX = static_cast<int>(hit.wallX * static_cast<float>(texWidth));
     
     // Корректировка для предотвращения зеркального отображения
     if ((hit.side == 0 && hit.rayDirX > 0) || (hit.side == 1 && hit.rayDirY < 0)) {
@@ -110,10 +111,10 @@ void Renderer::drawTexturedWallStrip(int x, int drawStart, int drawEnd, const Ra
     // Обеспечиваем, чтобы texX был в пределах текстуры
     texX = std::max(0, std::min(texX, static_cast<int>(wallTextureImage_.getSize().x) - 1));
     
-    // Правильное вычисление шага текстуры по Y
+    // Вычисление шага текстуры по Y
     float step = static_cast<float>(wallTextureImage_.getSize().y) / static_cast<float>(lineHeight);
     
-    // Исправленный расчет позиции текстуры с учетом высоты обзора
+    // Расчет позиции текстуры с учетом высоты обзора
     float texPos = (static_cast<float>(drawStart) - static_cast<float>(RENDER_HEIGHT) * viewHeight_ + static_cast<float>(lineHeight) / 2.0f) * step;
     
     // Интенсивное затенение
@@ -158,7 +159,7 @@ void Renderer::drawTexturedFloorAndCeiling(const PlayerState& player, const std:
         float rayDirY1 = player.direction.y + player.plane.y;
         
         // Текущая позиция ряда пикселей относительно горизонта
-        float p = y - horizonLine;
+        float p = static_cast<float>(y - horizonLine);
         
         // Вертикальная позиция камеры (учитываем высоту обзора)
         float posZ = 0.5f * static_cast<float>(RENDER_HEIGHT);
@@ -211,7 +212,7 @@ void Renderer::drawTexturedFloorAndCeiling(const PlayerState& player, const std:
         float rayDirY1 = player.direction.y + player.plane.y;
         
         // Текущая позиция ряда пикселей относительно горизонта
-        float p = horizonLine - y;
+        float p = static_cast<float>(horizonLine - y);
         
         // Вертикальная позиция камеры
         float posZ = 0.5f * static_cast<float>(RENDER_HEIGHT);

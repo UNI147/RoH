@@ -29,8 +29,21 @@ private:
     PlayerState player_;
     LevelResources currentLevel_;
     
+    // Состояние инициализации
+    bool gameReady_ = false;
+    sf::Font loadingFont_;
+    sf::Text loadingText_;
+    
+    // Элементы интерфейса загрузки
+    sf::RectangleShape progressBarBackground_;
+    sf::RectangleShape progressBar_;
+    sf::Text loadingTitle_;
+    
     void handleEvents();
     void loadLevel();
-    void initializeAudio();
     void loadSounds();
+    void initializeResources();
+    void playBackgroundMusic();
+    void renderLoadingScreen();
+    void updateLoadingScreen(float progress);
 };

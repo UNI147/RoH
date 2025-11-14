@@ -1,7 +1,15 @@
 RoH/
 ├── CMakeLists.txt                     # Файл для сборки
 ├── resources/                         # Ресурсы игры
-│   ├── OPL3SB.sf2                     # Звуковой шрифт
+│   ├── OPL3SB.sf2                     # Основной звуковой шрифт
+│   ├── GravisUltrasound.sf2           # Звуковой шрифт
+│   ├── MT32.sf2                       # Звуковой шрифт
+│   ├── airfont380.sf2                 # Звуковой шрифт
+│   ├── YamahaXG.sf2                   # Звуковой шрифт
+│   ├── GeneralUserGS.sf2              # Звуковой шрифт
+│   ├── yamahatyros4.sf2               # Звуковой шрифт
+│   ├── SpecialElite.ttf               # Основной шрифт
+│   ├── GothicRus.ttf                  # Заголовочный шрифт
 │   ├── levels/                        # .roh-файлы уровней
 │   ├── textures/                      # Текстуры для игры (PNG)
 │   │   └── surfaces/                  # Текстуры стен, полов и потолков
