@@ -1,15 +1,10 @@
+#define _CRT_SECURE_NO_WARNINGS
 #include "SoundEngineer.h"
 #include <iostream>
 #include <algorithm>
 #include <random>
 #include "resource_manager/ResourceManager.h"
-#include "resource_manager/MusicNames.h"
 #include "resource_manager/SoundNames.h"
-
-#ifdef _WIN32
-#define _CRT_SECURE_NO_WARNINGS
-#include <windows.h>
-#endif
 
 namespace FluidSynthUtils {
     // Подавление логов через callback
@@ -497,7 +492,7 @@ void SoundEngineer::updateFootsteps(bool isMoving, bool isRunning, float deltaTi
     updateRandomSounds(deltaTime);
 }
 
-// Новая реализация playStepSound с панорамированием и эхом
+// Реализация playStepSound с панорамированием и эхом
 void SoundEngineer::playStepSound(float volume, float pitch, float pan) {
     auto& rm = ResourceManager::getInstance();
     

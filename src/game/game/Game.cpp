@@ -1,7 +1,5 @@
 #include "Game.h"
 #include <iostream>
-#include "resource_manager/MusicNames.h"
-#include "resource_manager/SoundNames.h"
 #include "resource_manager/FontNames.h"
 
 Game::Game(sf::RenderWindow& window) 
@@ -18,15 +16,41 @@ Game::Game(sf::RenderWindow& window)
     // Настройка элементов интерфейса загрузки
     setupLoadingScreen();
     
+    // Загружаем уровень ДО инициализации рендерера и игрока
     loadLevel();
-    loadSounds();
     
+    // Инициализируем рендерер после загрузки уровня
     renderer_ = std::make_unique<Renderer>(window_);
+    
+    // Настраиваем текстуры рендерера из данных уровня
+    setupRendererTextures();
     
     // Инициализация игрока из данных уровня
     player_.position = currentLevel_.playerStartPosition;
     player_.direction = currentLevel_.playerStartDirection;
     player_.plane = sf::Vector2f(0.0f, 0.66f);
+    
+    // Загружаем звуки после загрузки уровня
+    loadSounds();
+}
+
+void Game::setupRendererTextures() {
+    if (!currentLevel_.floorTexture.empty()) {
+        renderer_->setFloorTexture(currentLevel_.floorTexture);
+    }
+    if (!currentLevel_.ceilingTexture.empty()) {
+        renderer_->setCeilingTexture(currentLevel_.ceilingTexture);
+    }
+    
+    // Устанавливаем текстуры стен на основе данных уровня
+    for (const auto& [texName, texPath] : currentLevel_.textures) {
+        // Пропускаем текстуры пола и потолка, они уже установлены
+        if (texName == currentLevel_.floorTexture || texName == currentLevel_.ceilingTexture) {
+            continue;
+        }
+        // Остальные текстуры считаем текстурами стен
+        renderer_->addWallTexture(texName);
+    }
 }
 
 void Game::setupLoadingScreen() {
@@ -80,7 +104,7 @@ void Game::initializeResources() {
     auto& rm = ResourceManager::getInstance();
     rm.setBasePath("resources/");
     
-    // Загружаем шрифты - сначала GothicRus для заголовка
+    // Загружаем шрифты
     if (!rm.loadFont(Fonts::GOTHIC_RUS, "GothicRus.ttf")) {
         std::cerr << "Failed to load Gothic font!" << std::endl;
     }
@@ -89,20 +113,14 @@ void Game::initializeResources() {
         std::cerr << "CRITICAL: Failed to load main font!" << std::endl;
     }
     
-    // Остальные ресурсы без изменений...
-    rm.loadSound(Sounds::STEP, "sounds/effects/step.wav");
-    rm.loadSound(Sounds::AMBIENCE_LOOP, "sounds/effects/ambienceloop.wav");
-    rm.loadSound(Sounds::DROPS, "sounds/effects/drops.wav");
+    // Звуки - используем прямые строки вместо констант
+    rm.loadSound("step", "sounds/effects/step.wav");
+    rm.loadSound("ambienceloop", "sounds/effects/ambienceloop.wav"); 
+    rm.loadSound("drops", "sounds/effects/drops.wav");
     
+    // SoundFont и MIDI
     rm.loadSoundFont("default", "OPL3SB.sf2");
-    rm.loadMIDI(Music::ADRIANS_ASLEEP, "sounds/music/Adrian'sAsleep.mid");
-    
-    // Fallback только если основные шрифты не загрузились
-    if (!rm.hasFont(Fonts::SPECIAL_ELITE) && !rm.hasFont(Fonts::GOTHIC_RUS)) {
-        #ifdef _WIN32
-        rm.loadFont(Fonts::SYSTEM_FALLBACK, "C:/Windows/Fonts/arial.ttf");
-        #endif
-    }
+    rm.loadMIDI("adrians_asleep", "sounds/music/Adrian'sAsleep.mid");
 }
 
 void Game::updateLoadingScreen(float progress) {
@@ -261,11 +279,18 @@ void Game::update() {
 }
 
 void Game::startAmbientSounds() {
-    // Запускаем фоновый звук ambienceloop
-    soundEngineer_.startAmbience(Sounds::AMBIENCE_LOOP, 25.0f);
+    // Запускаем фоновый звук
+    if (!currentLevel_.ambienceSound.empty()) {
+        soundEngineer_.startAmbience("level_ambience", 25.0f);
+        std::cout << "Started level ambience: " << currentLevel_.ambienceSound << std::endl;
+    } else {
+        // Fallback на системный эмбиент, если в уровне не указан
+        soundEngineer_.startAmbience("ambienceloop", 25.0f);
+        std::cout << "Using default ambience (level ambience not specified)" << std::endl;
+    }
     
     // Добавляем случайные звуки с интервалом 15-45 секунд
-    soundEngineer_.addRandomSound(Sounds::DROPS, 15.0f, 45.0f, 40.0f);
+    soundEngineer_.addRandomSound("drops", 15.0f, 45.0f, 40.0f);
 }
 
 void Game::render() {
@@ -283,27 +308,15 @@ void Game::render() {
 }
 
 void Game::playBackgroundMusic() {
+    // Используем музыку из данных уровня
     if (!currentLevel_.backgroundMusic.empty() && soundEngineer_.isAudioReady()) {
-        std::vector<std::string> possibleNames = {
-            Music::ADRIANS_ASLEEP,
-            "Adrian'sAsleep",
-            "adrians_asleep"
-        };
+        std::cout << "Attempting to play level music: " << currentLevel_.backgroundMusic << std::endl;
         
-        for (const auto& name : possibleNames) {
-            if (ResourceManager::getInstance().hasMIDI(name)) {
-                std::cout << "Attempting to play MIDI: " << name << std::endl;
-                soundEngineer_.playMIDI(name, true);
-                soundEngineer_.setMusicVolume(25.0f);
-                std::cout << "Playing background music: " << name << std::endl;
-                return;
-            }
-        }
-        
-        // Если не нашли по стандартным именам, пробуем путь из уровня
-        std::cout << "Trying to play music from level path: " << currentLevel_.backgroundMusic << std::endl;
-        soundEngineer_.playMIDI(currentLevel_.backgroundMusic, true);
+        // Пробуем воспроизвести как MIDI
+        soundEngineer_.playMIDI("level_music", true);
         soundEngineer_.setMusicVolume(25.0f);
+        
+        std::cout << "Playing background music from level: " << currentLevel_.backgroundMusic << std::endl;
     } else {
         std::cout << "Cannot play background music - audio not ready or no music specified" << std::endl;
         if (!soundEngineer_.isAudioReady()) {
@@ -329,17 +342,45 @@ void Game::handleEvents() {
 void Game::loadLevel() {
     std::cout << "Loading level resources..." << std::endl;
     
-    if (MapLoader::loadLevel("test_level", "resources/levels/test_level.roh")) {
-        currentLevel_ = MapLoader::getLevel("test_level");
-        std::cout << "Level loaded successfully!" << std::endl;
+    if (MapLoader::loadLevel("current_level", "levels/test_level.roh")) {
+        currentLevel_ = MapLoader::getLevel("current_level");
+        std::cout << "Level '" << currentLevel_.name << "' loaded successfully!" << std::endl;
         
         // Загружаем текстуры из данных уровня
         auto& rm = ResourceManager::getInstance();
         for (const auto& [name, path] : currentLevel_.textures) {
             if (!rm.loadTexture(name, path)) {
                 std::cerr << "Failed to load texture: " << name << " from " << path << std::endl;
+            }
+        }
+        
+        // Загружаем музыку уровня
+        if (!currentLevel_.backgroundMusic.empty()) {
+            // Определяем тип музыки по расширению
+            std::string extension = currentLevel_.backgroundMusic.substr(
+                currentLevel_.backgroundMusic.find_last_of(".") + 1
+            );
+            
+            if (extension == "mid" || extension == "midi") {
+                rm.loadMIDI("level_music", currentLevel_.backgroundMusic);
             } else {
-                std::cout << "Successfully loaded texture: " << name << std::endl;
+                rm.loadMusic("level_music", currentLevel_.backgroundMusic);
+            }
+            std::cout << "Level music: " << currentLevel_.backgroundMusic << std::endl;
+        }
+        
+        // ЗАГРУЗКF ЭМБИЕНТ-ЗВУКА
+        if (!currentLevel_.ambienceSound.empty()) {
+            // Определяем тип звука по расширению
+            std::string extension = currentLevel_.ambienceSound.substr(
+                currentLevel_.ambienceSound.find_last_of(".") + 1
+            );
+            
+            if (extension == "wav" || extension == "ogg" || extension == "flac") {
+                rm.loadSound("level_ambience", currentLevel_.ambienceSound);
+                std::cout << "Level ambience sound: " << currentLevel_.ambienceSound << std::endl;
+            } else {
+                std::cerr << "Unsupported ambience sound format: " << currentLevel_.ambienceSound << std::endl;
             }
         }
     } else {
@@ -352,15 +393,16 @@ void Game::loadLevel() {
 void Game::loadSounds() {
     auto& rm = ResourceManager::getInstance();
     
-    if (!rm.hasSound(Sounds::STEP)) {
+    // Загружаем системные звуки - используем прямые имена
+    if (!rm.hasSound("step")) {
         std::cerr << "Critical error: Step sound not loaded!" << std::endl;
     }
     
-    if (!rm.hasSound(Sounds::AMBIENCE_LOOP)) {
+    if (!rm.hasSound("ambienceloop")) {
         std::cerr << "Warning: Ambience sound not loaded" << std::endl;
     }
     
-    if (!rm.hasSound(Sounds::DROPS)) {
+    if (!rm.hasSound("drops")) {
         std::cerr << "Warning: Drops sound not loaded" << std::endl;
     }
 }

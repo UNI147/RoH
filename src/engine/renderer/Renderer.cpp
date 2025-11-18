@@ -3,7 +3,6 @@
 #include <iostream>
 #include <algorithm>
 #include "resource_manager/ResourceManager.h"
-#include "resource_manager/TextureNames.h"
 
 Renderer::Renderer(sf::RenderWindow& window) 
     : window_(window) {
@@ -18,32 +17,28 @@ Renderer::Renderer(sf::RenderWindow& window)
     auto& rm = ResourceManager::getInstance();
     useTextures_ = true;
     
-    if (!rm.hasTexture(Textures::BRICKS)) {
-        std::cout << "Texture not available: " << Textures::BRICKS << std::endl;
-        useTextures_ = false;
-    }
-    if (!rm.hasTexture(Textures::BOARDS)) {
-        std::cout << "Texture not available: " << Textures::BOARDS << std::endl;
-        useTextures_ = false;
-    }
-    if (!rm.hasTexture(Textures::PARQUET)) {
-        std::cout << "Texture not available: " << Textures::PARQUET << std::endl;
-        useTextures_ = false;
-    }
-    
-    if (useTextures_) {
-        std::cout << "Textured rendering enabled" << std::endl;
+    // Проверяем, есть ли вообще текстуры
+    if (rm.hasTexture("walls") || rm.hasTexture("ceilings") || rm.hasTexture("floors")) {
+        std::cout << "Some textures available, textured rendering enabled" << std::endl;
         
         try {
-            wallTextureImage_ = rm.getTexture(Textures::BRICKS).copyToImage();
-            floorTextureImage_ = rm.getTexture(Textures::PARQUET).copyToImage();
-            ceilingTextureImage_ = rm.getTexture(Textures::BOARDS).copyToImage();
+            // Пробуем загрузить любую доступную текстуру для fallback
+            if (rm.hasTexture("walls")) {
+                wallTextureImage_ = rm.getTexture("walls").copyToImage();
+            }
+            if (rm.hasTexture("floors")) {
+                floorTextureImage_ = rm.getTexture("floors").copyToImage();
+            }
+            if (rm.hasTexture("ceilings")) {
+                ceilingTextureImage_ = rm.getTexture("ceilings").copyToImage();
+            }
         } catch (const std::exception& e) {
             std::cerr << "Error preloading texture images: " << e.what() << std::endl;
             useTextures_ = false;
         }
     } else {
-        std::cout << "Falling back to color rendering" << std::endl;
+        std::cout << "No textures available, falling back to color rendering" << std::endl;
+        useTextures_ = false;
     }
 }
 
@@ -320,5 +315,35 @@ void Renderer::setWallTexture(int wallType, const std::string& textureName) {
     auto& rm = ResourceManager::getInstance();
     if (rm.hasTexture(textureName)) {
         wallTextures_[wallType] = &rm.getTexture(textureName);
+    }
+}
+
+void Renderer::setFloorTexture(const std::string& textureName) {
+    floorTextureName_ = textureName;
+    auto& rm = ResourceManager::getInstance();
+    if (rm.hasTexture(textureName)) {
+        floorTextureImage_ = rm.getTexture(textureName).copyToImage();
+        std::cout << "Renderer: Floor texture set to " << textureName << std::endl;
+    }
+}
+
+void Renderer::setCeilingTexture(const std::string& textureName) {
+    ceilingTextureName_ = textureName;
+    auto& rm = ResourceManager::getInstance();
+    if (rm.hasTexture(textureName)) {
+        ceilingTextureImage_ = rm.getTexture(textureName).copyToImage();
+        std::cout << "Renderer: Ceiling texture set to " << textureName << std::endl;
+    }
+}
+
+void Renderer::addWallTexture(const std::string& textureName) {
+    wallTextureNames_.push_back(textureName);
+    auto& rm = ResourceManager::getInstance();
+    if (rm.hasTexture(textureName)) {
+        // Используем первую текстуру стен как основную
+        if (wallTextureNames_.size() == 1) {
+            wallTextureImage_ = rm.getTexture(textureName).copyToImage();
+            std::cout << "Renderer: Primary wall texture set to " << textureName << std::endl;
+        }
     }
 }

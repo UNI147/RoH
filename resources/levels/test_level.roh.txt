@@ -1,19 +1,15 @@
 # RoH Level File
 # Формат: [SECTION] затем параметры
 
-[LEVEL]
-name "Test Dungeon"
-background_music resources/sounds/music/Adrian'sAsleep.mid
-ambience_sound sounds/effects/ambienceloop.wav
-
-[RESOURCES]
-# Текстуры
-wall_texture walls resources/textures/surfaces/bricks.png
-floor_texture floors resources/textures/surfaces/parquet.png
-ceiling_texture ceilings resources/textures/surfaces/boards.png
-
 [PLAYER]
 player 1.5 1.5 -1.0 0.0
+
+[RESOURCES]
+# type name path
+texture bricks resources/textures/surfaces/bricks.png
+texture boards resources/textures/surfaces/boards.png  
+texture parquet resources/textures/surfaces/parquet.png
+music adrians_asleep resources/sounds/music/Adrian'sAsleep.mid
 
 [GRID]
 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1

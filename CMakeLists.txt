@@ -75,8 +75,6 @@ add_executable(game
     src/sound_engineer/SoundEngineer.h
     src/resource_manager/ResourceManager.cpp
     src/resource_manager/ResourceManager.h
-    src/resource_manager/TextureNames.h
-    src/resource_manager/MusicNames.h
     src/resource_manager/SoundNames.h
     src/resource_manager/FontNames.h
 )

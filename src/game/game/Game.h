@@ -1,3 +1,4 @@
+// Game.h
 #pragma once
 #include <SFML/Graphics.hpp>
 #include <memory>
@@ -42,6 +43,7 @@ private:
     void loadSounds();
     void initializeResources();
     void setupLoadingScreen();
+    void setupRendererTextures();
     void playBackgroundMusic();
     void startAmbientSounds();
     void renderLoadingScreen();

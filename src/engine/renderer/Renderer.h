@@ -13,6 +13,10 @@ public:
     // Методы для управления высотой камеры (точки обзора)
     void setViewHeight(float height);
     float getViewHeight() const;
+    
+    void setFloorTexture(const std::string& textureName);
+    void setCeilingTexture(const std::string& textureName);
+    void addWallTexture(const std::string& textureName);
 
 private:
     sf::RenderWindow& window_;
@@ -47,4 +51,8 @@ private:
     
     // Максимальное расстояние затемнения
     float maxDarkDistance_ = 5.0f;
+    
+    std::string floorTextureName_;
+    std::string ceilingTextureName_;
+    std::vector<std::string> wallTextureNames_;
 };

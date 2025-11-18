@@ -6,11 +6,15 @@
 #include <memory>
 #include <vector>
 
-// Добавляем структуру уровня
+// Структура уровня
 struct LevelData {
+    std::string name;
     std::vector<std::vector<int>> grid;
     std::unordered_map<std::string, std::string> textures;
     std::string backgroundMusic;
+    std::string floorTexture;
+    std::string ceilingTexture;
+    std::string ambienceSound;
     sf::Vector2f playerStartPosition;
     sf::Vector2f playerStartDirection;
 };
@@ -87,6 +91,7 @@ private:
     // Вспомогательные методы для парсинга уровня
     bool parseResourceLine(const std::string& line, LevelData& level);
     bool parsePlayerPosition(const std::string& line, LevelData& level);
+    bool parseLevelInfo(const std::string& line, LevelData& level);
     
     // Вспомогательный метод для получения расширения файла
     std::string getFileExtension(const std::string& filename) const;

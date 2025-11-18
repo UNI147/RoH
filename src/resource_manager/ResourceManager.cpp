@@ -3,8 +3,6 @@
 #include <fstream>
 #include <sstream>
 #include <filesystem>
-#include "resource_manager/TextureNames.h"
-#include "resource_manager/MusicNames.h"
 #include <algorithm>
 
 namespace fs = std::filesystem;
@@ -219,6 +217,64 @@ bool ResourceManager::hasFont(const std::string& name) const {
     return fonts_.find(name) != fonts_.end();
 }
 
+bool ResourceManager::parseLevelInfo(const std::string& line, LevelData& level) {
+    std::istringstream iss(line);
+    std::string key;
+    
+    if (!(iss >> key)) {
+        return false;
+    }
+    
+    if (key == "name") {
+        std::string name;
+        std::getline(iss, name);
+        // Убираем лишние пробелы в начале
+        if (!name.empty() && name[0] == ' ') {
+            name = name.substr(1);
+        }
+        level.name = name;
+        return true;
+    } else if (key == "background_music") {
+        std::string musicPath;
+        std::getline(iss, musicPath);
+        if (!musicPath.empty() && musicPath[0] == ' ') {
+            musicPath = musicPath.substr(1);
+        }
+        level.backgroundMusic = musicPath;
+        return true;
+    } else if (key == "ambience_sound") {
+        std::string soundPath;
+        std::getline(iss, soundPath);
+        if (!soundPath.empty() && soundPath[0] == ' ') {
+            soundPath = soundPath.substr(1);
+        }
+        level.ambienceSound = soundPath;
+        return true;
+    } else if (key == "wall_texture") {
+        std::string texName, texPath;
+        if (iss >> texName >> texPath) {
+            level.textures[texName] = texPath;
+            return true;
+        }
+    } else if (key == "floor_texture") {
+        std::string texName, texPath;
+        if (iss >> texName >> texPath) {
+            level.floorTexture = texName;
+            level.textures[texName] = texPath;
+            return true;
+        }
+    } else if (key == "ceiling_texture") {
+        std::string texName, texPath;
+        if (iss >> texName >> texPath) {
+            level.ceilingTexture = texName;
+            level.textures[texName] = texPath;
+            return true;
+        }
+    }
+    
+    return false;
+}
+
 bool ResourceManager::loadLevel(const std::string& name, const std::string& filename) {
     std::string foundPath = findResourceFile(filename);
     if (foundPath.empty()) {
@@ -237,6 +293,9 @@ bool ResourceManager::loadLevel(const std::string& name, const std::string& file
         bool readingGrid = false;
         std::vector<std::vector<int>> grid;
         
+        // Инициализируем имя уровня
+        levelData->name = name;
+        
         while (std::getline(file, line)) {
             // Пропускаем пустые строки и комментарии
             if (line.empty() || line[0] == '#') continue;
@@ -249,6 +308,9 @@ bool ResourceManager::loadLevel(const std::string& name, const std::string& file
                 readingGrid = false;
                 continue;
             } else if (line == "[PLAYER]") {
+                readingGrid = false;
+                continue;
+            } else if (line == "[LEVEL]") {
                 readingGrid = false;
                 continue;
             }
@@ -267,8 +329,10 @@ bool ResourceManager::loadLevel(const std::string& name, const std::string& file
                     grid.push_back(row);
                 }
             } else {
-                // Обработка ресурсов и позиции игрока
-                if (!parseResourceLine(line, *levelData) && !parsePlayerPosition(line, *levelData)) {
+                // Обработка всех типов данных уровня
+                if (!parseResourceLine(line, *levelData) && 
+                    !parsePlayerPosition(line, *levelData) &&
+                    !parseLevelInfo(line, *levelData)) {
                     std::cout << "Unknown level directive: " << line << std::endl;
                 }
             }
@@ -352,13 +416,16 @@ LevelData ResourceManager::createTestLevel() {
         {1, 1, 1, 1, 1, 1, 1, 1}
     };
     
-    // Регистрируем стандартные пути
-    level.textures[Textures::BRICKS] = "textures/surfaces/bricks.png";
-    level.textures[Textures::BOARDS] = "textures/surfaces/boards.png";
-    level.textures[Textures::PARQUET] = "textures/surfaces/parquet.png";
+    // Регистрируем стандартные пути - использовать прямые строки
+    level.textures["walls"] = "textures/surfaces/bricks.png";
+    level.textures["ceilings"] = "textures/surfaces/boards.png";
+    level.textures["floors"] = "textures/surfaces/parquet.png";
     
-    // Музыка
-    level.backgroundMusic = Music::ADRIANS_ASLEEP;
+    // Музыка - использовать прямое имя
+    level.backgroundMusic = "sounds/music/Adrian'sAsleep.mid";
+    
+    // ЭМБИЕНТ ДЛЯ ТЕСТОВОГО УРОВНЯ
+    level.ambienceSound = "sounds/effects/ambienceloop.wav";
     
     // Стартовая позиция игрока
     level.playerStartPosition = sf::Vector2f(1.5f, 1.5f);
