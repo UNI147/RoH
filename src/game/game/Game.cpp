@@ -113,14 +113,12 @@ void Game::initializeResources() {
         std::cerr << "CRITICAL: Failed to load main font!" << std::endl;
     }
     
-    // Звуки - используем прямые строки вместо констант
+    // Звуки
     rm.loadSound("step", "sounds/effects/step.wav");
-    rm.loadSound("ambienceloop", "sounds/effects/ambienceloop.wav"); 
     rm.loadSound("drops", "sounds/effects/drops.wav");
     
-    // SoundFont и MIDI
+    // SoundFont
     rm.loadSoundFont("default", "OPL3SB.sf2");
-    rm.loadMIDI("adrians_asleep", "sounds/music/Adrian'sAsleep.mid");
 }
 
 void Game::updateLoadingScreen(float progress) {
@@ -281,7 +279,7 @@ void Game::update() {
 void Game::startAmbientSounds() {
     // Запускаем фоновый звук
     if (!currentLevel_.ambienceSound.empty()) {
-        soundEngineer_.startAmbience("level_ambience", 25.0f);
+        soundEngineer_.startAmbience("level_ambience", 100.0f);
         std::cout << "Started level ambience: " << currentLevel_.ambienceSound << std::endl;
     } else {
         // Fallback на системный эмбиент, если в уровне не указан
@@ -290,7 +288,7 @@ void Game::startAmbientSounds() {
     }
     
     // Добавляем случайные звуки с интервалом 15-45 секунд
-    soundEngineer_.addRandomSound("drops", 15.0f, 45.0f, 40.0f);
+    soundEngineer_.addRandomSound("drops", 15.0f, 45.0f, 100.0f);
 }
 
 void Game::render() {
@@ -314,7 +312,7 @@ void Game::playBackgroundMusic() {
         
         // Пробуем воспроизвести как MIDI
         soundEngineer_.playMIDI("level_music", true);
-        soundEngineer_.setMusicVolume(25.0f);
+        soundEngineer_.setMusicVolume(100.0f);
         
         std::cout << "Playing background music from level: " << currentLevel_.backgroundMusic << std::endl;
     } else {

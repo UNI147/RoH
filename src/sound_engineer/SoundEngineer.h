@@ -10,6 +10,48 @@
 #include <fluidsynth.h>
 #endif
 
+struct MultiChannelSound {
+    std::unique_ptr<sf::Sound> mainChannel;
+    std::unique_ptr<sf::Sound> supportChannel;
+    float delay;
+    float mainVolume;
+    float supportVolume;
+    float mainPan;
+    float supportPan;
+    
+    // Конструктор по умолчанию
+    MultiChannelSound() = default;
+    
+    // Конструктор перемещения
+    MultiChannelSound(MultiChannelSound&& other) noexcept
+        : mainChannel(std::move(other.mainChannel))
+        , supportChannel(std::move(other.supportChannel))
+        , delay(other.delay)
+        , mainVolume(other.mainVolume)
+        , supportVolume(other.supportVolume)
+        , mainPan(other.mainPan)
+        , supportPan(other.supportPan) {
+    }
+    
+    // Оператор присваивания перемещением
+    MultiChannelSound& operator=(MultiChannelSound&& other) noexcept {
+        if (this != &other) {
+            mainChannel = std::move(other.mainChannel);
+            supportChannel = std::move(other.supportChannel);
+            delay = other.delay;
+            mainVolume = other.mainVolume;
+            supportVolume = other.supportVolume;
+            mainPan = other.mainPan;
+            supportPan = other.supportPan;
+        }
+        return *this;
+    }
+    
+    // Удаляем конструктор копирования и оператор присваивания копированием
+    MultiChannelSound(const MultiChannelSound&) = delete;
+    MultiChannelSound& operator=(const MultiChannelSound&) = delete;
+};
+
 class SoundEngineer {
 public:
     SoundEngineer();
@@ -76,6 +118,12 @@ private:
         float volumeMultiplier;
         float pitchMultiplier;
         float pan;
+        
+        EchoSound() = default;
+        EchoSound(EchoSound&&) = default;
+        EchoSound& operator=(EchoSound&&) = default;
+        EchoSound(const EchoSound&) = delete;
+        EchoSound& operator=(const EchoSound&) = delete;
     };
     
     std::vector<EchoSound> echoSounds_;
@@ -103,9 +151,17 @@ private:
     std::vector<RandomSound> randomSounds_;
     std::mt19937 randomGenerator_;
     
+    // Многоканальные звуки
+    std::vector<MultiChannelSound> multiChannelSounds_;
+    
     // Вспомогательные методы
-    void playStepSound(float volume, float pitch, float pan);
+    void playStepSound(float volume, float pitch, bool isLeftStep);
     void addEcho(const sf::SoundBuffer& buffer, float baseVolume, float basePitch, float pan, float delay = 0.1f);
     void updateEchoSounds(float deltaTime);
     void setupRandomSound(RandomSound& sound);
+    
+    // Новые методы для многоканальности
+    void addMultiChannelEcho(const sf::SoundBuffer& buffer, float volume, 
+                           float pitch, bool isLeftStep, float delay);
+    void updateMultiChannelSounds(float deltaTime);
 };

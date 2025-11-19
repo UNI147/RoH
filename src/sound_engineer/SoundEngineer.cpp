@@ -59,7 +59,6 @@ SoundEngineer::~SoundEngineer() {
 #endif
 }
 
-// ДОБАВЛЯЕМ НЕДОСТАЮЩИЙ МЕТОД
 void SoundEngineer::setupRandomSound(RandomSound& sound) {
     std::uniform_real_distribution<float> dist(sound.minDelay, sound.maxDelay);
     sound.nextPlayTime = dist(randomGenerator_);
@@ -441,45 +440,30 @@ void SoundEngineer::stopAllSounds() {
 void SoundEngineer::updateFootsteps(bool isMoving, bool isRunning, float deltaTime) {
     if (!footstepsEnabled_) return;
     
-    // Обновляем систему эха
-    updateEchoSounds(deltaTime);
+    // Обновляем многоканальные звуки
+    updateMultiChannelSounds(deltaTime);
     
     if (isMoving) {
         stepTimer_ -= deltaTime;
         
         if (stepTimer_ <= 0.0f) {
-            // Определяем интервал между шагами
-            float stepInterval = isRunning ? baseStepInterval_ * 0.6f : baseStepInterval_;
+            // ОДИНАКОВАЯ громкость для обеих ног
+            float volume = isRunning ? 100.0f : 75.0f;
+            float pitch = isRunning ? 1.1f : 1.0f;
             
-            // Параметры в зависимости от типа движения
-            float volume, pitch, pan;
-            
-            if (isRunning) {
-                volume = leftStep_ ? 85.0f : 75.0f;
-                pitch = leftStep_ ? 1.15f : 1.1f;
-                pan = leftStep_ ? -0.4f : 0.4f;
-            } else {
-                volume = leftStep_ ? 65.0f : 55.0f;
-                pitch = leftStep_ ? 0.95f : 1.0f;
-                pan = leftStep_ ? -0.2f : 0.2f;
-            }
-            
-            // Воспроизводим звук шага с правильным панорамированием
-            playStepSound(volume, pitch, pan);
+            // Передаем информацию о том, какая нога доминирует
+            playStepSound(volume, pitch, leftStep_);
             
             // Чередуем ноги
             leftStep_ = !leftStep_;
-            
-            // Сбрасываем таймер
-            stepTimer_ = stepInterval;
+            stepTimer_ = isRunning ? baseStepInterval_ * 0.6f : baseStepInterval_;
         }
     } else {
         stepTimer_ = 0.0f;
-        // Сбрасываем чередование ног при остановке
         leftStep_ = true;
     }
     
-    // Очищаем завершенные звуки (кроме ambience и echo)
+    // Очистка завершенных звуков
     activeSounds_.erase(
         std::remove_if(activeSounds_.begin(), activeSounds_.end(),
             [](const std::unique_ptr<sf::Sound>& sound) {
@@ -488,99 +472,131 @@ void SoundEngineer::updateFootsteps(bool isMoving, bool isRunning, float deltaTi
         activeSounds_.end()
     );
     
-    // Обновляем случайные звуки
     updateRandomSounds(deltaTime);
 }
 
+void SoundEngineer::updateMultiChannelSounds(float deltaTime) {
+    for (size_t i = 0; i < multiChannelSounds_.size(); ) {
+        auto& sound = multiChannelSounds_[i];
+        
+        if (sound.mainChannel->getStatus() == sf::Sound::Stopped && 
+            sound.supportChannel->getStatus() == sf::Sound::Stopped) {
+            // Удаляем элемент
+            multiChannelSounds_.erase(multiChannelSounds_.begin() + i);
+            continue;
+        }
+        
+        sound.delay -= deltaTime;
+        
+        if (sound.delay <= 0.0f) {
+            // Полная громкость когда задержка прошла
+            sound.mainChannel->setVolume(sound.mainVolume);
+            sound.supportChannel->setVolume(sound.supportVolume);
+        } else if (sound.delay < 0.1f) {
+            // Плавное нарастание
+            float fadeIn = 1.0f - (sound.delay / 0.1f);
+            sound.mainChannel->setVolume(sound.mainVolume * fadeIn);
+            sound.supportChannel->setVolume(sound.supportVolume * fadeIn);
+        }
+        
+        ++i;
+    }
+}
+
 // Реализация playStepSound с панорамированием и эхом
-void SoundEngineer::playStepSound(float volume, float pitch, float pan) {
+void SoundEngineer::playStepSound(float volume, float pitch, bool isLeftStep) {
     auto& rm = ResourceManager::getInstance();
     
     if (rm.hasSound(Sounds::STEP)) {
         try {
-            // Основной звук шага
+            // ОСНОВНОЙ КАНАЛ
             auto mainSound = std::make_unique<sf::Sound>();
             mainSound->setBuffer(rm.getSound(Sounds::STEP));
             mainSound->setVolume(volume);
             mainSound->setPitch(pitch);
             
-            // Устанавливаем панорамирование
+            // ВТОРОСТЕПЕННЫЙ КАНАЛ
+            auto supportSound = std::make_unique<sf::Sound>();
+            supportSound->setBuffer(rm.getSound(Sounds::STEP));
+            supportSound->setVolume(volume * 0.4f);
+            supportSound->setPitch(pitch * 0.9f);
+            
+            // ПАНОРАМИРОВАНИЕ
+            float mainPan = isLeftStep ? -0.6f : 0.6f;
+            float supportPan = isLeftStep ? 0.3f : -0.3f;
+            
             #if SFML_VERSION_MAJOR >= 2 && SFML_VERSION_MINOR >= 5
-            mainSound->setPosition(pan, 0.0f, 0.0f);
+            mainSound->setPosition(mainPan, 0.0f, 0.0f);
+            supportSound->setPosition(supportPan, 0.0f, 0.0f);
             mainSound->setMinDistance(1.0f);
+            supportSound->setMinDistance(1.0f);
             mainSound->setAttenuation(0.5f);
-            #else
-            // Альтернатива для старых версий SFML
-            mainSound->setPosition(pan * 10.0f, 0.0f, 0.0f);
+            supportSound->setAttenuation(0.7f);
             #endif
             
             mainSound->setRelativeToListener(true);
+            supportSound->setRelativeToListener(true);
+            
+            // Воспроизводим оба канала
             mainSound->play();
+            supportSound->play();
+            
+            // Сохраняем оба звука
             activeSounds_.push_back(std::move(mainSound));
+            activeSounds_.push_back(std::move(supportSound));
             
-            // Добавляем эхо-эффект с задержкой
-            addEcho(rm.getSound(Sounds::STEP), volume * 0.3f, pitch * 0.8f, pan, 0.15f);
-            
-            // Второе, более тихое эхо
-            addEcho(rm.getSound(Sounds::STEP), volume * 0.15f, pitch * 0.7f, pan, 0.3f);
+            // ЭХО-ЭФФЕКТЫ тоже обновляем
+            this->addMultiChannelEcho(rm.getSound(Sounds::STEP), volume, pitch, isLeftStep, 0.15f);
+            this->addMultiChannelEcho(rm.getSound(Sounds::STEP), volume * 0.5f, pitch * 0.8f, isLeftStep, 0.3f);
             
         } catch (const std::exception& e) {
             std::cerr << "Error playing step sound: " << e.what() << std::endl;
         }
-    } else {
-        std::cerr << "Step sound not found: " << Sounds::STEP << std::endl;
     }
 }
 
 // Метод для добавления эха
-void SoundEngineer::addEcho(const sf::SoundBuffer& buffer, float baseVolume, float basePitch, float pan, float delay) {
-    EchoSound echo;
-    echo.sound = std::make_unique<sf::Sound>();
-    echo.sound->setBuffer(buffer);
-    echo.sound->setVolume(0.0f);
-    echo.sound->setPitch(basePitch);
-    echo.delay = delay;
-    echo.volumeMultiplier = baseVolume;
-    echo.pitchMultiplier = basePitch;
-    echo.pan = pan;
+void SoundEngineer::addMultiChannelEcho(const sf::SoundBuffer& buffer, float volume, 
+                                       float pitch, bool isLeftStep, float delay) {
+    MultiChannelSound echo;
     
-    // Настраиваем позиционирование
+    // Основной канал эха
+    echo.mainChannel = std::make_unique<sf::Sound>();
+    echo.mainChannel->setBuffer(buffer);
+    echo.mainChannel->setVolume(0.0f);
+    echo.mainChannel->setPitch(pitch * 0.8f);
+    
+    // Второстепенный канал эха  
+    echo.supportChannel = std::make_unique<sf::Sound>();
+    echo.supportChannel->setBuffer(buffer);
+    echo.supportChannel->setVolume(0.0f);
+    echo.supportChannel->setPitch(pitch * 0.7f);
+    
+    // Панорамирование эха
+    float mainPan = isLeftStep ? -0.4f : 0.4f;
+    float supportPan = isLeftStep ? 0.2f : -0.2f;
+    
     #if SFML_VERSION_MAJOR >= 2 && SFML_VERSION_MINOR >= 5
-    echo.sound->setPosition(pan, 0.0f, 0.0f);
-    echo.sound->setMinDistance(1.0f);
-    echo.sound->setAttenuation(0.3f);
-    #else
-    echo.sound->setPosition(pan * 10.0f, 0.0f, 0.0f);
+    echo.mainChannel->setPosition(mainPan, 0.0f, 0.0f);
+    echo.supportChannel->setPosition(supportPan, 0.0f, 0.0f);
+    echo.mainChannel->setMinDistance(1.0f);
+    echo.supportChannel->setMinDistance(1.0f);
+    echo.mainChannel->setAttenuation(0.4f);
+    echo.supportChannel->setAttenuation(0.6f);
     #endif
     
-    echo.sound->setRelativeToListener(true);
-    echo.sound->play();
+    echo.mainChannel->setRelativeToListener(true);
+    echo.supportChannel->setRelativeToListener(true);
     
-    echoSounds_.push_back(std::move(echo));
-}
-
-// Метод для обновления системы эха
-void SoundEngineer::updateEchoSounds(float deltaTime) {
-    for (auto it = echoSounds_.begin(); it != echoSounds_.end(); ) {
-        auto& echo = *it;
-        
-        if (echo.sound->getStatus() == sf::Sound::Stopped) {
-            it = echoSounds_.erase(it);
-            continue;
-        }
-        
-        // Уменьшаем задержку
-        echo.delay -= deltaTime;
-        
-        if (echo.delay <= 0.0f) {
-            // Когда задержка прошла, устанавливаем полную громкость
-            echo.sound->setVolume(echo.volumeMultiplier);
-        } else if (echo.delay < 0.1f) {
-            // Плавное нарастание громкости в последние 0.1 секунды
-            float fadeIn = 1.0f - (echo.delay / 0.1f);
-            echo.sound->setVolume(echo.volumeMultiplier * fadeIn);
-        }
-        
-        ++it;
-    }
+    echo.delay = delay;
+    echo.mainVolume = volume * 0.3f;
+    echo.supportVolume = volume * 0.15f;
+    echo.mainPan = mainPan;
+    echo.supportPan = supportPan;
+    
+    echo.mainChannel->play();
+    echo.supportChannel->play();
+    
+    // Используем emplace_back с std::move для перемещения объекта
+    multiChannelSounds_.emplace_back(std::move(echo));
 }
