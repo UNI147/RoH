@@ -53,13 +53,13 @@ public:
     const std::string& getSoundFontPath(const std::string& name) const;
     bool hasSoundFont(const std::string& name) const;
     
-    // Загрузка уровней
-    bool loadLevel(const std::string& name, const std::string& filename);
+    // Хранение уровней (загруженных через MapLoader)
+    void addLevel(const std::string& name, std::unique_ptr<LevelData> level);
     const LevelData& getLevel(const std::string& name) const;
     bool hasLevel(const std::string& name) const;
     
     // Создание тестового уровня
-    LevelData createTestLevel();
+    std::unique_ptr<LevelData> createTestLevel();
 
     std::string findResourceFile(const std::string& filename) const;
     bool loadResourceBatch(const std::vector<std::pair<std::string, std::string>>& resources);
@@ -68,6 +68,9 @@ public:
     std::string getFullPath(const std::string& relativePath) const {
         return basePath_ + relativePath;
     }
+    
+    // Утилиты
+    std::string getFileExtension(const std::string& filename) const;
         
     // Очистка всех ресурсов
     void clear();
@@ -85,16 +88,8 @@ private:
     std::unordered_map<std::string, std::string> midiFiles_;
     std::unordered_map<std::string, std::string> soundFonts_;
     
-    // Уровни
+    // Уровни (только хранение)
     std::unordered_map<std::string, std::unique_ptr<LevelData>> levels_;
-    
-    // Вспомогательные методы для парсинга уровня
-    bool parseResourceLine(const std::string& line, LevelData& level);
-    bool parsePlayerPosition(const std::string& line, LevelData& level);
-    bool parseLevelInfo(const std::string& line, LevelData& level);
-    
-    // Вспомогательный метод для получения расширения файла
-    std::string getFileExtension(const std::string& filename) const;
     
     std::string basePath_ = "resources/";
     

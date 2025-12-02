@@ -217,142 +217,10 @@ bool ResourceManager::hasFont(const std::string& name) const {
     return fonts_.find(name) != fonts_.end();
 }
 
-bool ResourceManager::parseLevelInfo(const std::string& line, LevelData& level) {
-    std::istringstream iss(line);
-    std::string key;
-    
-    if (!(iss >> key)) {
-        return false;
-    }
-    
-    if (key == "name") {
-        std::string name;
-        std::getline(iss, name);
-        // Убираем лишние пробелы в начале
-        if (!name.empty() && name[0] == ' ') {
-            name = name.substr(1);
-        }
-        level.name = name;
-        return true;
-    } else if (key == "background_music") {
-        std::string musicPath;
-        std::getline(iss, musicPath);
-        if (!musicPath.empty() && musicPath[0] == ' ') {
-            musicPath = musicPath.substr(1);
-        }
-        level.backgroundMusic = musicPath;
-        return true;
-    } else if (key == "ambience_sound") {
-        std::string soundPath;
-        std::getline(iss, soundPath);
-        if (!soundPath.empty() && soundPath[0] == ' ') {
-            soundPath = soundPath.substr(1);
-        }
-        level.ambienceSound = soundPath;
-        return true;
-    } else if (key == "wall_texture") {
-        std::string texName, texPath;
-        if (iss >> texName >> texPath) {
-            level.textures[texName] = texPath;
-            return true;
-        }
-    } else if (key == "floor_texture") {
-        std::string texName, texPath;
-        if (iss >> texName >> texPath) {
-            level.floorTexture = texName;
-            level.textures[texName] = texPath;
-            return true;
-        }
-    } else if (key == "ceiling_texture") {
-        std::string texName, texPath;
-        if (iss >> texName >> texPath) {
-            level.ceilingTexture = texName;
-            level.textures[texName] = texPath;
-            return true;
-        }
-    }
-    
-    return false;
-}
-
-bool ResourceManager::loadLevel(const std::string& name, const std::string& filename) {
-    std::string foundPath = findResourceFile(filename);
-    if (foundPath.empty()) {
-        std::cerr << "Level file not found: " << filename << std::endl;
-        return false;
-    }
-    
-    auto levelData = std::make_unique<LevelData>();
-    std::ifstream file(foundPath);
-    
-    if (!file.is_open()) {
-        std::cerr << "Failed to load level file: " << filename << std::endl;
-        *levelData = createTestLevel();
-    } else {
-        std::string line;
-        bool readingGrid = false;
-        std::vector<std::vector<int>> grid;
-        
-        // Инициализируем имя уровня
-        levelData->name = name;
-        
-        while (std::getline(file, line)) {
-            // Пропускаем пустые строки и комментарии
-            if (line.empty() || line[0] == '#') continue;
-            
-            // Обрабатываем секции
-            if (line == "[GRID]") {
-                readingGrid = true;
-                continue;
-            } else if (line == "[RESOURCES]") {
-                readingGrid = false;
-                continue;
-            } else if (line == "[PLAYER]") {
-                readingGrid = false;
-                continue;
-            } else if (line == "[LEVEL]") {
-                readingGrid = false;
-                continue;
-            }
-            
-            if (readingGrid) {
-                // Чтение сетки уровня
-                std::vector<int> row;
-                std::istringstream iss(line);
-                int value;
-                
-                while (iss >> value) {
-                    row.push_back(value);
-                }
-                
-                if (!row.empty()) {
-                    grid.push_back(row);
-                }
-            } else {
-                // Обработка всех типов данных уровня
-                if (!parseResourceLine(line, *levelData) && 
-                    !parsePlayerPosition(line, *levelData) &&
-                    !parseLevelInfo(line, *levelData)) {
-                    std::cout << "Unknown level directive: " << line << std::endl;
-                }
-            }
-        }
-        
-        levelData->grid = grid;
-        file.close();
-    }
-    
-    levels_[name] = std::move(levelData);
-    std::cout << "Loaded level: " << name << " from " << filename << std::endl;
-    
-    // Загружаем текстуры сразу после загрузки уровня
-    for (const auto& [texName, texPath] : levels_[name]->textures) {
-        if (!loadTexture(texName, texPath)) {
-            std::cerr << "Failed to load level texture: " << texName << " from " << texPath << std::endl;
-        }
-    }
-    
-    return true;
+// Хранение уровней
+void ResourceManager::addLevel(const std::string& name, std::unique_ptr<LevelData> level) {
+    levels_[name] = std::move(level);
+    std::cout << "Level added to ResourceManager: " << name << std::endl;
 }
 
 const LevelData& ResourceManager::getLevel(const std::string& name) const {
@@ -368,44 +236,12 @@ bool ResourceManager::hasLevel(const std::string& name) const {
     return levels_.find(name) != levels_.end();
 }
 
-bool ResourceManager::parseResourceLine(const std::string& line, LevelData& level) {
-    std::istringstream iss(line);
-    std::string type, name, path;
-    
-    if (!(iss >> type >> name >> path)) {
-        return false;
-    }
-    
-    if (type == "texture") {
-        level.textures[name] = path;
-        return true;
-    } else if (type == "music") {
-        level.backgroundMusic = path;
-        return true;
-    }
-    
-    return false;
-}
-
-bool ResourceManager::parsePlayerPosition(const std::string& line, LevelData& level) {
-    std::istringstream iss(line);
-    std::string type;
-    float x, y, dirX, dirY;
-    
-    if (iss >> type >> x >> y >> dirX >> dirY && type == "player") {
-        level.playerStartPosition = sf::Vector2f(x, y);
-        level.playerStartDirection = sf::Vector2f(dirX, dirY);
-        return true;
-    }
-    
-    return false;
-}
-
-LevelData ResourceManager::createTestLevel() {
-    LevelData level;
+// Создание тестового уровня
+std::unique_ptr<LevelData> ResourceManager::createTestLevel() {
+    auto level = std::make_unique<LevelData>();
     
     // Тестовая сетка
-    level.grid = {
+    level->grid = {
         {1, 1, 1, 1, 1, 1, 1, 1},
         {1, 0, 0, 0, 0, 0, 0, 1},
         {1, 0, 0, 0, 0, 0, 0, 1},
@@ -416,20 +252,25 @@ LevelData ResourceManager::createTestLevel() {
         {1, 1, 1, 1, 1, 1, 1, 1}
     };
     
-    // Регистрируем стандартные пути - использовать прямые строки
-    level.textures["walls"] = "textures/surfaces/bricks.png";
-    level.textures["ceilings"] = "textures/surfaces/boards.png";
-    level.textures["floors"] = "textures/surfaces/parquet.png";
+    // Регистрируем стандартные пути
+    level->textures["walls"] = "textures/surfaces/bricks.png";
+    level->textures["ceilings"] = "textures/surfaces/boards.png";
+    level->textures["floors"] = "textures/surfaces/parquet.png";
     
-    // Музыка - использовать прямое имя
-    level.backgroundMusic = "sounds/music/Adrian'sAsleep.mid";
+    level->floorTexture = "floors";
+    level->ceilingTexture = "ceilings";
+    
+    // Музыка
+    level->backgroundMusic = "sounds/music/Adrian'sAsleep.mid";
     
     // ЭМБИЕНТ ДЛЯ ТЕСТОВОГО УРОВНЯ
-    level.ambienceSound = "sounds/effects/ambienceloop.wav";
+    level->ambienceSound = "sounds/effects/ambienceloop.wav";
     
     // Стартовая позиция игрока
-    level.playerStartPosition = sf::Vector2f(1.5f, 1.5f);
-    level.playerStartDirection = sf::Vector2f(-1.0f, 0.0f);
+    level->playerStartPosition = sf::Vector2f(1.5f, 1.5f);
+    level->playerStartDirection = sf::Vector2f(-1.0f, 0.0f);
+    
+    level->name = "Test Level";
     
     return level;
 }

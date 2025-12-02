@@ -1,13 +1,15 @@
-// Game.h
 #pragma once
 #include <SFML/Graphics.hpp>
 #include <memory>
 #include "engine/raycasting/RayCaster.h"
 #include "engine/renderer/Renderer.h"
+#include "engine/geographer/LevelProcessor.h"
 #include "engine/geographer/MapLoader.h"
 #include "sound_engineer/SoundEngineer.h"
 #include "input_handler/InputHandler.h"
 #include "resource_manager/ResourceManager.h"
+
+class MapLoader;
 
 class Game {
 public:

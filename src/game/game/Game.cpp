@@ -340,51 +340,33 @@ void Game::handleEvents() {
 void Game::loadLevel() {
     std::cout << "Loading level resources..." << std::endl;
     
-    if (MapLoader::loadLevel("current_level", "levels/test_level.roh")) {
-        currentLevel_ = MapLoader::getLevel("current_level");
-        std::cout << "Level '" << currentLevel_.name << "' loaded successfully!" << std::endl;
-        
-        // Загружаем текстуры из данных уровня
-        auto& rm = ResourceManager::getInstance();
-        for (const auto& [name, path] : currentLevel_.textures) {
-            if (!rm.loadTexture(name, path)) {
-                std::cerr << "Failed to load texture: " << name << " from " << path << std::endl;
-            }
-        }
-        
-        // Загружаем музыку уровня
-        if (!currentLevel_.backgroundMusic.empty()) {
-            // Определяем тип музыки по расширению
-            std::string extension = currentLevel_.backgroundMusic.substr(
-                currentLevel_.backgroundMusic.find_last_of(".") + 1
-            );
-            
-            if (extension == "mid" || extension == "midi") {
-                rm.loadMIDI("level_music", currentLevel_.backgroundMusic);
-            } else {
-                rm.loadMusic("level_music", currentLevel_.backgroundMusic);
-            }
-            std::cout << "Level music: " << currentLevel_.backgroundMusic << std::endl;
-        }
-        
-        // ЗАГРУЗКF ЭМБИЕНТ-ЗВУКА
-        if (!currentLevel_.ambienceSound.empty()) {
-            // Определяем тип звука по расширению
-            std::string extension = currentLevel_.ambienceSound.substr(
-                currentLevel_.ambienceSound.find_last_of(".") + 1
-            );
-            
-            if (extension == "wav" || extension == "ogg" || extension == "flac") {
-                rm.loadSound("level_ambience", currentLevel_.ambienceSound);
-                std::cout << "Level ambience sound: " << currentLevel_.ambienceSound << std::endl;
-            } else {
-                std::cerr << "Unsupported ambience sound format: " << currentLevel_.ambienceSound << std::endl;
-            }
-        }
+    // Используем LevelProcessor для обработки уровня
+    if (LevelProcessor::processLevel("current_level", "levels/test_level.roh", soundEngineer_)) {
+        currentLevel_ = LevelProcessor::getProcessedLevel("current_level");
+        std::cout << "Level '" << currentLevel_.name << "' loaded and processed successfully!" << std::endl;
     } else {
         std::cout << "Using test level..." << std::endl;
         auto& rm = ResourceManager::getInstance();
-        currentLevel_ = rm.createTestLevel();
+        
+        // Исправленная строка: разыменовываем указатель
+        std::unique_ptr<LevelData> testLevel = rm.createTestLevel();
+        if (testLevel) {
+            currentLevel_ = *testLevel;  // Копируем данные
+        } else {
+            // Fallback если создание тестового уровня не удалось
+            currentLevel_.name = "Fallback Test Level";
+            currentLevel_.grid = {
+                {1, 1, 1, 1},
+                {1, 0, 0, 1},
+                {1, 0, 0, 1},
+                {1, 1, 1, 1}
+            };
+            currentLevel_.playerStartPosition = sf::Vector2f(1.5f, 1.5f);
+            currentLevel_.playerStartDirection = sf::Vector2f(-1.0f, 0.0f);
+        }
+        
+        // Загружаем ресурсы тестового уровня
+        LevelProcessor::loadLevelResources(currentLevel_);
     }
 }
 

@@ -71,6 +71,8 @@ add_executable(game
     src/engine/renderer/Renderer.h
     src/engine/geographer/MapLoader.cpp
     src/engine/geographer/MapLoader.h
+    src/engine/geographer/LevelProcessor.cpp
+    src/engine/geographer/LevelProcessor.h
     src/sound_engineer/SoundEngineer.cpp
     src/sound_engineer/SoundEngineer.h
     src/resource_manager/ResourceManager.cpp
