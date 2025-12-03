@@ -1,0 +1,81 @@
+# RoH Level File с тремя текстурными слоями
+# Формат: [SECTION] затем параметры
+
+[LEVEL]
+name "Test Dungeon"
+background_music resources/sounds/music/zdapiska.mid
+ambience_sound sounds/effects/ambienceloop.wav
+
+[WALL_TEXTURES]
+# Формат: ID путь_к_текстуре
+1 resources/textures/surfaces/stonewall.png
+2 resources/textures/surfaces/chainsonstones.png
+3 resources/textures/surfaces/bloodystones.png
+
+[FLOOR_TEXTURES]
+# ID путь_к_текстуре
+1 resources/textures/surfaces/stonewall.png
+2 resources/textures/surfaces/bloodystones.png
+3 resources/textures/surfaces/cobweb.png
+
+[CEILING_TEXTURES]
+# ID путь_к_текстуре
+1 resources/textures/surfaces/stonewall.png
+2 resources/textures/surfaces/cobweb.png
+
+[PLAYER]
+player 1.5 1.5 -1.0 0.0
+
+[WALL_LAYER]
+1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1
+1 0 2 0 0 2 0 0 0 3 3 3 3 3 0 1
+1 0 2 0 0 0 0 0 0 3 0 0 0 3 0 1
+1 0 0 0 0 2 0 0 0 3 0 0 0 3 0 1
+1 0 2 2 0 0 0 0 0 3 0 0 0 3 0 1
+1 0 0 0 0 0 0 0 0 3 3 0 3 3 0 1
+1 1 1 1 1 1 1 0 0 0 0 0 0 0 0 1
+1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1
+1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1
+1 0 0 0 0 0 0 0 0 0 0 0 1 0 1 1
+1 0 0 1 1 0 1 0 1 0 1 1 1 0 0 1
+1 0 0 1 1 0 0 0 0 0 1 0 0 0 1 1
+1 0 0 0 0 0 1 0 1 0 1 0 1 1 0 1
+1 0 0 0 0 0 0 0 0 0 1 0 0 0 0 1
+1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+
+[FLOOR_LAYER]
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0
+0 1 0 2 2 0 2 2 2 0 0 0 0 0 1 0
+0 1 0 2 2 2 2 2 2 0 3 3 3 0 1 0
+0 1 1 2 2 0 2 2 2 0 3 3 3 0 1 0
+0 1 0 0 2 2 2 2 2 0 3 3 3 0 1 0
+0 1 1 1 1 1 1 1 1 0 0 1 0 0 1 0
+0 0 0 0 0 0 0 0 0 1 1 1 1 1 0 0
+0 1 1 1 1 1 1 1 0 1 1 1 1 1 1 0
+0 1 2 2 2 2 2 1 0 1 1 1 1 1 1 0
+0 1 2 2 2 2 2 1 0 1 1 1 0 0 0 0
+0 1 2 0 0 2 0 1 0 1 0 0 0 1 1 0
+0 1 2 0 0 2 2 1 0 1 0 1 1 1 0 0
+0 1 2 2 2 2 0 1 0 1 0 1 0 0 1 0
+0 1 1 1 1 1 1 1 0 1 0 1 1 1 1 0
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+
+[CEILING_LAYER]
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0
+0 1 0 2 2 0 2 2 2 0 0 0 0 0 1 0
+0 1 0 2 2 2 2 2 2 0 1 1 1 0 1 0
+0 1 1 2 2 0 2 2 2 0 1 1 1 0 1 0
+0 1 0 0 2 2 2 2 2 0 1 1 1 0 1 0
+0 1 1 1 1 1 1 1 1 0 0 1 0 0 1 0
+0 0 0 0 0 0 0 0 0 1 1 1 1 1 0 0
+0 1 1 1 1 1 1 1 0 1 1 1 1 1 1 0
+0 1 2 2 2 2 2 1 0 1 1 1 1 1 1 0
+0 1 2 2 2 2 2 1 0 1 1 1 0 0 0 0
+0 1 2 0 0 2 0 1 0 1 0 0 0 1 1 0
+0 1 2 0 0 2 2 1 0 1 0 1 1 1 0 0
+0 1 2 2 2 2 0 1 0 1 0 1 0 0 1 0
+0 1 1 1 1 1 1 1 0 1 0 1 1 1 1 0
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0

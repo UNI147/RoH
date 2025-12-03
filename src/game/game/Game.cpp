@@ -5,7 +5,7 @@
 Game::Game(sf::RenderWindow& window) 
     : window_(window) {
     
-    // Инициализация ресурсов
+    // Инициализация ресурсов (только шрифты и звуки)
     initializeResources();
     
     // Инициализация звуковой системы
@@ -16,10 +16,10 @@ Game::Game(sf::RenderWindow& window)
     // Настройка элементов интерфейса загрузки
     setupLoadingScreen();
     
-    // Загружаем уровень ДО инициализации рендерера и игрока
+    // Загружаем уровень ДО инициализации рендерера
     loadLevel();
     
-    // Инициализируем рендерер после загрузки уровня
+    // Инициализируем рендерер ПОСЛЕ загрузки уровня
     renderer_ = std::make_unique<Renderer>(window_);
     
     // Настраиваем текстуры рендерера из данных уровня
@@ -37,98 +37,82 @@ Game::Game(sf::RenderWindow& window)
 void Game::setupRendererTextures() {
     auto& rm = ResourceManager::getInstance();
     
-    std::cout << "Setting up renderer textures..." << std::endl;
-    std::cout << "Level has " << currentLevel_.wallTextures.size() << " wall textures to load" << std::endl;
+    std::cout << "=== Setting up renderer textures ===" << std::endl;
+    
+    // Очищаем старые текстуры
+    renderer_->clearTextures();
     
     // Загружаем текстуры стен
-    bool anyWallTexturesLoaded = false;
     for (const auto& [texId, texName] : currentLevel_.wallTextures) {
-        std::cout << "Trying to setup wall texture ID " << texId << " with name " << texName << std::endl;
+        std::cout << "Setting up wall texture ID " << texId << ": " << texName << std::endl;
         
         if (rm.hasTexture(texName)) {
             renderer_->addWallTexture(texId, texName);
-            anyWallTexturesLoaded = true;
-            std::cout << "Wall texture ID " << texId << " setup successfully" << std::endl;
+            std::cout << "  ✓ Texture loaded" << std::endl;
         } else {
-            std::cout << "Wall texture '" << texName << "' not found in ResourceManager, trying fallback..." << std::endl;
+            std::cout << "  ✗ Texture not found in ResourceManager" << std::endl;
             
-            // Пробуем fallback
-            if (rm.hasTexture("walls")) {
-                renderer_->addWallTexture(texId, "walls");
-                anyWallTexturesLoaded = true;
-                std::cout << "Using fallback 'walls' texture for ID " << texId << std::endl;
+            // Попробуем загрузить напрямую
+            auto it = currentLevel_.texturePaths.find(texName);
+            if (it != currentLevel_.texturePaths.end()) {
+                if (rm.loadTexture(texName, it->second)) {
+                    renderer_->addWallTexture(texId, texName);
+                    std::cout << "  ✓ Texture loaded directly" << std::endl;
+                }
             }
         }
     }
     
     // Загружаем текстуры пола
-    bool anyFloorTexturesLoaded = false;
-    for (const auto& [texId, texName] : currentLevel_.floorTextures) { // Исправлено: floorTextures
-        std::cout << "Trying to setup floor texture ID " << texId << " with name " << texName << std::endl;
+    for (const auto& [texId, texName] : currentLevel_.floorTextures) {
+        std::cout << "Setting up floor texture ID " << texId << ": " << texName << std::endl;
         
         if (rm.hasTexture(texName)) {
             renderer_->addFloorTexture(texId, texName);
-            anyFloorTexturesLoaded = true;
-            std::cout << "Floor texture ID " << texId << " setup successfully" << std::endl;
+            std::cout << "  ✓ Texture loaded" << std::endl;
         } else {
-            std::cout << "Floor texture '" << texName << "' not found in ResourceManager, trying fallback..." << std::endl;
+            std::cout << "  ✗ Texture not found in ResourceManager" << std::endl;
             
-            // Пробуем fallback
-            if (rm.hasTexture("floors")) {
-                renderer_->addFloorTexture(texId, "floors"); // Исправлено: addFloorTexture
-                anyFloorTexturesLoaded = true;
-                std::cout << "Using fallback 'floors' texture for ID " << texId << std::endl;
+            auto it = currentLevel_.texturePaths.find(texName);
+            if (it != currentLevel_.texturePaths.end()) {
+                if (rm.loadTexture(texName, it->second)) {
+                    renderer_->addFloorTexture(texId, texName);
+                    std::cout << "  ✓ Texture loaded directly" << std::endl;
+                }
             }
         }
     }
     
     // Загружаем текстуры потолка
-    bool anyCeilingTexturesLoaded = false;
-    for (const auto& [texId, texName] : currentLevel_.ceilingTextures) { // Исправлено: ceilingTextures
-        std::cout << "Trying to setup ceiling texture ID " << texId << " with name " << texName << std::endl;
+    for (const auto& [texId, texName] : currentLevel_.ceilingTextures) {
+        std::cout << "Setting up ceiling texture ID " << texId << ": " << texName << std::endl;
         
         if (rm.hasTexture(texName)) {
             renderer_->addCeilingTexture(texId, texName);
-            anyCeilingTexturesLoaded = true;
-            std::cout << "Ceiling texture ID " << texId << " setup successfully" << std::endl;
+            std::cout << "  ✓ Texture loaded" << std::endl;
         } else {
-            std::cout << "Ceiling texture '" << texName << "' not found in ResourceManager, trying fallback..." << std::endl;
+            std::cout << "  ✗ Texture not found in ResourceManager" << std::endl;
             
-            // Пробуем fallback
-            if (rm.hasTexture("ceilings")) {
-                renderer_->addCeilingTexture(texId, "ceilings"); // Исправлено: addCeilingTexture
-                anyCeilingTexturesLoaded = true;
-                std::cout << "Using fallback 'ceilings' texture for ID " << texId << std::endl;
+            auto it = currentLevel_.texturePaths.find(texName);
+            if (it != currentLevel_.texturePaths.end()) {
+                if (rm.loadTexture(texName, it->second)) {
+                    renderer_->addCeilingTexture(texId, texName);
+                    std::cout << "  ✓ Texture loaded directly" << std::endl;
+                }
             }
         }
     }
     
-    if (!anyWallTexturesLoaded) {
-        std::cout << "No wall textures were loaded, checking for fallback..." << std::endl;
-        
-        // Пробуем загрузить fallback текстуры
-        if (rm.hasTexture("walls")) {
-            renderer_->addWallTexture(1, "walls");
-            std::cout << "Using fallback 'walls' texture" << std::endl;
-        }
-    }
-    
-    if (!anyFloorTexturesLoaded) {
-        std::cout << "No floor textures were loaded, checking for fallback..." << std::endl;
-        
-        if (rm.hasTexture("floors")) {
-            renderer_->addFloorTexture(1, "floors");
-            std::cout << "Using fallback 'floors' texture" << std::endl;
-        }
-    }
-    
-    if (!anyCeilingTexturesLoaded) {
-        std::cout << "No ceiling textures were loaded, checking for fallback..." << std::endl;
-        
-        if (rm.hasTexture("ceilings")) {
-            renderer_->addCeilingTexture(1, "ceilings");
-            std::cout << "Using fallback 'ceilings' texture" << std::endl;
-        }
+    // Проверяем, есть ли вообще текстуры (используя публичные методы)
+    if (!renderer_->hasTextures()) {
+        renderer_->setUseTextures(false);
+        std::cout << "Warning: No textures loaded, falling back to color rendering" << std::endl;
+    } else {
+        renderer_->setUseTextures(true);
+        std::cout << "Textured rendering enabled with " 
+                  << renderer_->getWallTextureCount() << " wall textures, "
+                  << renderer_->getFloorTextureCount() << " floor textures, "
+                  << renderer_->getCeilingTextureCount() << " ceiling textures" << std::endl;
     }
 }
 
@@ -183,23 +167,7 @@ void Game::initializeResources() {
     auto& rm = ResourceManager::getInstance();
     rm.setBasePath("resources/");
     
-    // Сначала предзагружаем общие текстуры
-    std::cout << "Preloading common resources..." << std::endl;
-    
-    // Пробуем загрузить общие текстуры
-    std::vector<std::pair<std::string, std::string>> initialTextures = {
-        {"wall_1", "textures/surfaces/bricksbloody.png"},
-        {"floor_1", "textures/surfaces/parquet.png"},
-        {"ceiling_1", "textures/surfaces/boards.png"},
-        // Fallback текстуры
-        {"walls", "textures/surfaces/bricksbloody.png"},
-        {"floors", "textures/surfaces/parquet.png"},
-        {"ceilings", "textures/surfaces/boards.png"}
-    };
-    
-    rm.loadResourceBatch(initialTextures);
-    
-    // Загружаем шрифты
+    // Загружаем шрифты и звуки
     if (!rm.loadFont(Fonts::GOTHIC_RUS, "GothicRus.ttf")) {
         std::cerr << "Failed to load Gothic font!" << std::endl;
     }

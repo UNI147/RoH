@@ -94,6 +94,11 @@ RayHit RayCaster::castRay(const PlayerState& player, const std::vector<std::vect
         hit.floorYWall = static_cast<float>(mapY) + 1.0f;
     }
     
+    if (hitDetected) {
+        // Получаем ID текстуры из карты
+        hit.textureId = map[mapY][mapX];
+    }
+    
     return hit;
 }
 

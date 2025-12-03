@@ -14,20 +14,32 @@ public:
                      const std::vector<std::vector<int>>& ceilingMap,
                      RayCaster& rayCaster);
     
-    void setWallTexture(int wallType, const std::string& textureName);
-    
-    // Методы для управления высотой камеры (точки обзора)
-    void setViewHeight(float height);
-    float getViewHeight() const;
-    
-    void setFloorTexture(const std::string& textureName);
-    void setCeilingTexture(const std::string& textureName);
-    void addWallTexture(const std::string& textureName);
-    
-    // Новые методы для управления текстурными слоями
+    // Управление текстурами
     void addWallTexture(int textureId, const std::string& textureName);
     void addFloorTexture(int textureId, const std::string& textureName);
     void addCeilingTexture(int textureId, const std::string& textureName);
+    
+    // Очистка текстур
+    void clearTextures();
+    
+    // Проверка наличия текстур
+    bool hasTextures() const;
+    size_t getWallTextureCount() const;
+    size_t getFloorTextureCount() const;
+    size_t getCeilingTextureCount() const;
+    
+    // Управление высотой камеры
+    void setViewHeight(float height);
+    float getViewHeight() const;
+    
+    // Управление режимом текстур
+    void setUseTextures(bool use);
+    
+    // Старые методы для совместимости
+    void setWallTexture(int wallType, const std::string& textureName);
+    void setFloorTexture(const std::string& textureName);
+    void setCeilingTexture(const std::string& textureName);
+    void addWallTexture(const std::string& textureName);
 
 private:
     sf::RenderWindow& window_;
@@ -35,8 +47,7 @@ private:
     void drawWallStrip(int x, int drawStart, int drawEnd, int side, float distance);
     void drawFloorAndCeiling(int x, int drawStart, int drawEnd);
     void drawTexturedWallStrip(int x, int drawStart, int drawEnd, 
-                              const RayHit& hit, int lineHeight,
-                              const std::vector<std::vector<int>>& wallMap);
+                              const RayHit& hit, int lineHeight);
     void drawTexturedFloorAndCeiling(const PlayerState& player, 
                                     const std::vector<std::vector<int>>& floorMap,
                                     const std::vector<std::vector<int>>& ceilingMap,

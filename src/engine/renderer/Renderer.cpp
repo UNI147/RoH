@@ -14,37 +14,10 @@ Renderer::Renderer(sf::RenderWindow& window)
         renderSprite_.setTextureRect(sf::IntRect(0, 0, RENDER_WIDTH, RENDER_HEIGHT));
     }
     
-    auto& rm = ResourceManager::getInstance();
-    useTextures_ = true;
+    // Начальное состояние - текстуры не загружены
+    useTextures_ = false;
     
-    // Проверяем, есть ли вообще текстуры
-    if (rm.hasTexture("walls") || rm.hasTexture("ceilings") || rm.hasTexture("floors")) {
-        std::cout << "Some textures available, textured rendering enabled" << std::endl;
-        
-        try {
-            // Пробуем загрузить любую доступную текстуру для fallback
-            if (rm.hasTexture("walls")) {
-                // Используем временную переменную для изображения стен
-                sf::Image tempImage = rm.getTexture("walls").copyToImage();
-                // Добавляем как текстуру с ID 0 (стандартная)
-                wallTextureImages_[0] = tempImage;
-            }
-            if (rm.hasTexture("floors")) {
-                sf::Image tempImage = rm.getTexture("floors").copyToImage();
-                floorTextureImages_[0] = tempImage;
-            }
-            if (rm.hasTexture("ceilings")) {
-                sf::Image tempImage = rm.getTexture("ceilings").copyToImage();
-                ceilingTextureImages_[0] = tempImage;
-            }
-        } catch (const std::exception& e) {
-            std::cerr << "Error preloading texture images: " << e.what() << std::endl;
-            useTextures_ = false;
-        }
-    } else {
-        std::cout << "No textures available, falling back to color rendering" << std::endl;
-        useTextures_ = false;
-    }
+    std::cout << "Renderer created (textures disabled by default)" << std::endl;
 }
 
 // Методы для управления высотой обзора
@@ -64,8 +37,8 @@ void Renderer::renderFrame(const PlayerState& player,
     updateRenderSpriteScale();
     renderTexture_.clear();
     
-    // Сначала рендерим пол и потолок
-    if (useTextures_) {
+    // Проверяем, включены ли текстуры
+    if (useTextures_ && hasTextures()) {
         drawTexturedFloorAndCeiling(player, floorMap, ceilingMap, rayCaster);
     } else {
         drawSolidFloorAndCeiling();
@@ -87,9 +60,8 @@ void Renderer::renderFrame(const PlayerState& player,
         if (drawStart < 0) drawStart = 0;
         if (drawEnd >= RENDER_HEIGHT) drawEnd = RENDER_HEIGHT - 1;
         
-        if (useTextures_) {
-            // Передаем wallMap для получения правильного ID текстуры
-            drawTexturedWallStrip(x, drawStart, drawEnd, hit, lineHeight, wallMap);
+        if (useTextures_ && hasTextures()) {
+            drawTexturedWallStrip(x, drawStart, drawEnd, hit, lineHeight);
         } else {
             drawWallStrip(x, drawStart, drawEnd, hit.side, hit.distance);
         }
@@ -101,38 +73,23 @@ void Renderer::renderFrame(const PlayerState& player,
 }
 
 void Renderer::drawTexturedWallStrip(int x, int drawStart, int drawEnd, 
-                                    const RayHit& hit, int lineHeight,
-                                    const std::vector<std::vector<int>>& wallMap) {
+                                    const RayHit& hit, int lineHeight) {
     if (lineHeight <= 0) return;
     
-    // Получаем ID текстуры из сетки стен по координатам удара
-    int texId = 0;
-    
-    if (hit.mapY >= 0 && hit.mapY < static_cast<int>(wallMap.size()) &&
-        hit.mapX >= 0 && hit.mapX < static_cast<int>(wallMap[0].size())) {
-        texId = wallMap[hit.mapY][hit.mapX];
-        
-        // Если texId == 0, это пустое пространство, не должно отрисовываться
-        if (texId == 0) {
-            return;
-        }
-    } else {
-        return;
-    }
+    // Используем ID текстуры из hit
+    int texId = hit.textureId;
     
     // Находим соответствующее изображение текстуры по ID
     sf::Image* textureImage = nullptr;
     auto it = wallTextureImages_.find(texId);
     if (it != wallTextureImages_.end()) {
         textureImage = &it->second;
-    } else {
+    } else if (!wallTextureImages_.empty()) {
         // Fallback: ищем любую текстуру стен
-        if (!wallTextureImages_.empty()) {
-            textureImage = &wallTextureImages_.begin()->second;
-            std::cout << "Warning: Wall texture ID " << texId << " not found, using fallback" << std::endl;
-        } else {
-            return;
-        }
+        textureImage = &wallTextureImages_.begin()->second;
+        std::cout << "Warning: Wall texture ID " << texId << " not found, using fallback" << std::endl;
+    } else {
+        return;
     }
     
     // Вычисление координаты текстуры по X
@@ -463,4 +420,33 @@ void Renderer::addCeilingTexture(int textureId, const std::string& textureName) 
         ceilingTextureImages_[textureId] = rm.getTexture(textureName).copyToImage();
         std::cout << "Renderer: Ceiling texture ID " << textureId << " set to " << textureName << std::endl;
     }
+}
+    
+void Renderer::clearTextures() {
+    wallTextureImages_.clear();
+    floorTextureImages_.clear();
+    ceilingTextureImages_.clear();
+    wallTextures_.clear();
+    
+    std::cout << "Renderer textures cleared" << std::endl;
+}
+
+bool Renderer::hasTextures() const {
+    return !wallTextureImages_.empty() || !floorTextureImages_.empty() || !ceilingTextureImages_.empty();
+}
+
+size_t Renderer::getWallTextureCount() const {
+    return wallTextureImages_.size();
+}
+
+size_t Renderer::getFloorTextureCount() const {
+    return floorTextureImages_.size();
+}
+
+size_t Renderer::getCeilingTextureCount() const {
+    return ceilingTextureImages_.size();
+}
+
+void Renderer::setUseTextures(bool use) {
+    useTextures_ = use;
 }

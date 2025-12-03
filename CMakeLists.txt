@@ -79,7 +79,6 @@ add_executable(game
     src/resource_manager/ResourceManager.h
     src/resource_manager/SoundNames.h
     src/resource_manager/FontNames.h
-    src/resource_manager/TexturePreloader.cpp
 )
 
 # Определение для статической линковки

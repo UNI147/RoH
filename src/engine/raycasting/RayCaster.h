@@ -17,6 +17,7 @@ struct RayHit {
     float rayDirY;
     float floorXWall;
     float floorYWall;
+    int textureId;
 };
 
 class RayCaster {
