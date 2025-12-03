@@ -11,7 +11,7 @@ public:
         // Список общих текстур для всех уровней
         std::vector<std::pair<std::string, std::string>> commonTextures = {
             {"wall_1", "textures/surfaces/bricksbloody.png"},
-            {"wall_2", "textures/surfaces/brickwall.png"},
+            {"wall_2", "textures/surfaces/bricks.png"},
             {"wall_3", "textures/surfaces/boards.png"},
             {"floor_1", "textures/surfaces/parquet.png"},
             {"floor_2", "textures/surfaces/carpet.png"},

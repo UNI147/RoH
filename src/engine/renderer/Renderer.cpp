@@ -88,7 +88,8 @@ void Renderer::renderFrame(const PlayerState& player,
         if (drawEnd >= RENDER_HEIGHT) drawEnd = RENDER_HEIGHT - 1;
         
         if (useTextures_) {
-            drawTexturedWallStrip(x, drawStart, drawEnd, hit, lineHeight);
+            // Передаем wallMap для получения правильного ID текстуры
+            drawTexturedWallStrip(x, drawStart, drawEnd, hit, lineHeight, wallMap);
         } else {
             drawWallStrip(x, drawStart, drawEnd, hit.side, hit.distance);
         }
@@ -99,22 +100,39 @@ void Renderer::renderFrame(const PlayerState& player,
     window_.draw(renderSprite_);
 }
 
-void Renderer::drawTexturedWallStrip(int x, int drawStart, int drawEnd, const RayHit& hit, int lineHeight) {
+void Renderer::drawTexturedWallStrip(int x, int drawStart, int drawEnd, 
+                                    const RayHit& hit, int lineHeight,
+                                    const std::vector<std::vector<int>>& wallMap) {
     if (lineHeight <= 0) return;
     
-    // Получаем ID текстуры из позиции удара
-    int texId = 1; // По умолчанию ID 1
+    // Получаем ID текстуры из сетки стен по координатам удара
+    int texId = 0;
     
-    // Находим соответствующее изображение текстуры
+    if (hit.mapY >= 0 && hit.mapY < static_cast<int>(wallMap.size()) &&
+        hit.mapX >= 0 && hit.mapX < static_cast<int>(wallMap[0].size())) {
+        texId = wallMap[hit.mapY][hit.mapX];
+        
+        // Если texId == 0, это пустое пространство, не должно отрисовываться
+        if (texId == 0) {
+            return;
+        }
+    } else {
+        return;
+    }
+    
+    // Находим соответствующее изображение текстуры по ID
     sf::Image* textureImage = nullptr;
     auto it = wallTextureImages_.find(texId);
     if (it != wallTextureImages_.end()) {
         textureImage = &it->second;
-    } else if (!wallTextureImages_.empty()) {
-        // Fallback на первую доступную текстуру стен
-        textureImage = &wallTextureImages_.begin()->second;
     } else {
-        return; // Нет текстур для рендеринга
+        // Fallback: ищем любую текстуру стен
+        if (!wallTextureImages_.empty()) {
+            textureImage = &wallTextureImages_.begin()->second;
+            std::cout << "Warning: Wall texture ID " << texId << " not found, using fallback" << std::endl;
+        } else {
+            return;
+        }
     }
     
     // Вычисление координаты текстуры по X

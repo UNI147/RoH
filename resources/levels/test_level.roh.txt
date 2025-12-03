@@ -8,7 +8,7 @@ ambience_sound sounds/effects/ambienceloop.wav
 
 [WALL_TEXTURES]
 # Формат: ID путь_к_текстуре
-1 resources/textures/surfaces/brickwall.png
+1 resources/textures/surfaces/bricks.png
 2 resources/textures/surfaces/bricksbloody.png
 3 resources/textures/surfaces/boards.png
 

@@ -34,7 +34,9 @@ private:
     
     void drawWallStrip(int x, int drawStart, int drawEnd, int side, float distance);
     void drawFloorAndCeiling(int x, int drawStart, int drawEnd);
-    void drawTexturedWallStrip(int x, int drawStart, int drawEnd, const RayHit& hit, int lineHeight);
+    void drawTexturedWallStrip(int x, int drawStart, int drawEnd, 
+                              const RayHit& hit, int lineHeight,
+                              const std::vector<std::vector<int>>& wallMap);
     void drawTexturedFloorAndCeiling(const PlayerState& player, 
                                     const std::vector<std::vector<int>>& floorMap,
                                     const std::vector<std::vector<int>>& ceilingMap,

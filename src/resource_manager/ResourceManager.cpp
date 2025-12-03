@@ -270,7 +270,7 @@ std::unique_ptr<LevelData> ResourceManager::createTestLevel() {
     
     // Пути к текстурам
     level->texturePaths["wall_0"] = "textures/surfaces/stone.png";
-    level->texturePaths["wall_1"] = "textures/surfaces/brickwall.png";
+    level->texturePaths["wall_1"] = "textures/surfaces/bricks.png";
     level->texturePaths["floor_1"] = "textures/surfaces/parquet.png";
     level->texturePaths["ceiling_1"] = "textures/surfaces/boards.png";
     
