@@ -25,4 +25,5 @@ private:
     static bool parsePlayerPosition(const std::string& line, LevelData& level);
     static bool parseLevelInfo(const std::string& line, LevelData& level);
     static bool parseGridLine(const std::string& line, std::vector<std::vector<int>>& grid);
+    static bool parseTextureLine(const std::string& line, LevelData& level, const std::string& type); // ДОБАВЛЕН
 };

@@ -240,37 +240,49 @@ bool ResourceManager::hasLevel(const std::string& name) const {
 std::unique_ptr<LevelData> ResourceManager::createTestLevel() {
     auto level = std::make_unique<LevelData>();
     
-    // Тестовая сетка
-    level->grid = {
+    // Тестовые сетки 8x8
+    level->wallGrid = {
         {1, 1, 1, 1, 1, 1, 1, 1},
         {1, 0, 0, 0, 0, 0, 0, 1},
+        {1, 0, 1, 0, 0, 1, 0, 1},
         {1, 0, 0, 0, 0, 0, 0, 1},
         {1, 0, 0, 0, 0, 0, 0, 1},
-        {1, 0, 0, 0, 0, 0, 0, 1},
-        {1, 0, 0, 0, 0, 0, 0, 1},
+        {1, 0, 1, 0, 0, 1, 0, 1},
         {1, 0, 0, 0, 0, 0, 0, 1},
         {1, 1, 1, 1, 1, 1, 1, 1}
     };
     
-    // Регистрируем стандартные пути
-    level->textures["walls"] = "textures/surfaces/bricks.png";
-    level->textures["ceilings"] = "textures/surfaces/boards.png";
-    level->textures["floors"] = "textures/surfaces/parquet.png";
+    // Тестовая сетка пола (все 1 - одна текстура)
+    level->floorGrid = std::vector<std::vector<int>>(8, std::vector<int>(8, 1));
     
-    level->floorTexture = "floors";
-    level->ceilingTexture = "ceilings";
+    // Тестовая сетка потолка (все 1 - одна текстура)
+    level->ceilingGrid = std::vector<std::vector<int>>(8, std::vector<int>(8, 1));
     
-    // Музыка
+    // Текстуры стен
+    level->wallTextures[0] = "wall_0";
+    level->wallTextures[1] = "wall_1";
+    
+    // Текстуры пола
+    level->floorTextures[1] = "floor_1";
+    
+    // Текстуры потолка
+    level->ceilingTextures[1] = "ceiling_1";
+    
+    // Пути к текстурам
+    level->texturePaths["wall_0"] = "textures/surfaces/stone.png";
+    level->texturePaths["wall_1"] = "textures/surfaces/brickwall.png";
+    level->texturePaths["floor_1"] = "textures/surfaces/parquet.png";
+    level->texturePaths["ceiling_1"] = "textures/surfaces/boards.png";
+    
+    // Музыка и звуки
     level->backgroundMusic = "sounds/music/Adrian'sAsleep.mid";
-    
-    // ЭМБИЕНТ ДЛЯ ТЕСТОВОГО УРОВНЯ
     level->ambienceSound = "sounds/effects/ambienceloop.wav";
     
     // Стартовая позиция игрока
     level->playerStartPosition = sf::Vector2f(1.5f, 1.5f);
     level->playerStartDirection = sf::Vector2f(-1.0f, 0.0f);
     
-    level->name = "Test Level";
+    level->name = "Test Level with Three Layers";
     
     return level;
 }

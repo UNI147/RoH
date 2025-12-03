@@ -35,21 +35,100 @@ Game::Game(sf::RenderWindow& window)
 }
 
 void Game::setupRendererTextures() {
-    if (!currentLevel_.floorTexture.empty()) {
-        renderer_->setFloorTexture(currentLevel_.floorTexture);
-    }
-    if (!currentLevel_.ceilingTexture.empty()) {
-        renderer_->setCeilingTexture(currentLevel_.ceilingTexture);
+    auto& rm = ResourceManager::getInstance();
+    
+    std::cout << "Setting up renderer textures..." << std::endl;
+    std::cout << "Level has " << currentLevel_.wallTextures.size() << " wall textures to load" << std::endl;
+    
+    // Загружаем текстуры стен
+    bool anyWallTexturesLoaded = false;
+    for (const auto& [texId, texName] : currentLevel_.wallTextures) {
+        std::cout << "Trying to setup wall texture ID " << texId << " with name " << texName << std::endl;
+        
+        if (rm.hasTexture(texName)) {
+            renderer_->addWallTexture(texId, texName);
+            anyWallTexturesLoaded = true;
+            std::cout << "Wall texture ID " << texId << " setup successfully" << std::endl;
+        } else {
+            std::cout << "Wall texture '" << texName << "' not found in ResourceManager, trying fallback..." << std::endl;
+            
+            // Пробуем fallback
+            if (rm.hasTexture("walls")) {
+                renderer_->addWallTexture(texId, "walls");
+                anyWallTexturesLoaded = true;
+                std::cout << "Using fallback 'walls' texture for ID " << texId << std::endl;
+            }
+        }
     }
     
-    // Устанавливаем текстуры стен на основе данных уровня
-    for (const auto& [texName, texPath] : currentLevel_.textures) {
-        // Пропускаем текстуры пола и потолка, они уже установлены
-        if (texName == currentLevel_.floorTexture || texName == currentLevel_.ceilingTexture) {
-            continue;
+    // Загружаем текстуры пола
+    bool anyFloorTexturesLoaded = false;
+    for (const auto& [texId, texName] : currentLevel_.floorTextures) { // Исправлено: floorTextures
+        std::cout << "Trying to setup floor texture ID " << texId << " with name " << texName << std::endl;
+        
+        if (rm.hasTexture(texName)) {
+            renderer_->addFloorTexture(texId, texName);
+            anyFloorTexturesLoaded = true;
+            std::cout << "Floor texture ID " << texId << " setup successfully" << std::endl;
+        } else {
+            std::cout << "Floor texture '" << texName << "' not found in ResourceManager, trying fallback..." << std::endl;
+            
+            // Пробуем fallback
+            if (rm.hasTexture("floors")) {
+                renderer_->addFloorTexture(texId, "floors"); // Исправлено: addFloorTexture
+                anyFloorTexturesLoaded = true;
+                std::cout << "Using fallback 'floors' texture for ID " << texId << std::endl;
+            }
         }
-        // Остальные текстуры считаем текстурами стен
-        renderer_->addWallTexture(texName);
+    }
+    
+    // Загружаем текстуры потолка
+    bool anyCeilingTexturesLoaded = false;
+    for (const auto& [texId, texName] : currentLevel_.ceilingTextures) { // Исправлено: ceilingTextures
+        std::cout << "Trying to setup ceiling texture ID " << texId << " with name " << texName << std::endl;
+        
+        if (rm.hasTexture(texName)) {
+            renderer_->addCeilingTexture(texId, texName);
+            anyCeilingTexturesLoaded = true;
+            std::cout << "Ceiling texture ID " << texId << " setup successfully" << std::endl;
+        } else {
+            std::cout << "Ceiling texture '" << texName << "' not found in ResourceManager, trying fallback..." << std::endl;
+            
+            // Пробуем fallback
+            if (rm.hasTexture("ceilings")) {
+                renderer_->addCeilingTexture(texId, "ceilings"); // Исправлено: addCeilingTexture
+                anyCeilingTexturesLoaded = true;
+                std::cout << "Using fallback 'ceilings' texture for ID " << texId << std::endl;
+            }
+        }
+    }
+    
+    if (!anyWallTexturesLoaded) {
+        std::cout << "No wall textures were loaded, checking for fallback..." << std::endl;
+        
+        // Пробуем загрузить fallback текстуры
+        if (rm.hasTexture("walls")) {
+            renderer_->addWallTexture(1, "walls");
+            std::cout << "Using fallback 'walls' texture" << std::endl;
+        }
+    }
+    
+    if (!anyFloorTexturesLoaded) {
+        std::cout << "No floor textures were loaded, checking for fallback..." << std::endl;
+        
+        if (rm.hasTexture("floors")) {
+            renderer_->addFloorTexture(1, "floors");
+            std::cout << "Using fallback 'floors' texture" << std::endl;
+        }
+    }
+    
+    if (!anyCeilingTexturesLoaded) {
+        std::cout << "No ceiling textures were loaded, checking for fallback..." << std::endl;
+        
+        if (rm.hasTexture("ceilings")) {
+            renderer_->addCeilingTexture(1, "ceilings");
+            std::cout << "Using fallback 'ceilings' texture" << std::endl;
+        }
     }
 }
 
@@ -104,6 +183,22 @@ void Game::initializeResources() {
     auto& rm = ResourceManager::getInstance();
     rm.setBasePath("resources/");
     
+    // Сначала предзагружаем общие текстуры
+    std::cout << "Preloading common resources..." << std::endl;
+    
+    // Пробуем загрузить общие текстуры
+    std::vector<std::pair<std::string, std::string>> initialTextures = {
+        {"wall_1", "textures/surfaces/bricksbloody.png"},
+        {"floor_1", "textures/surfaces/parquet.png"},
+        {"ceiling_1", "textures/surfaces/boards.png"},
+        // Fallback текстуры
+        {"walls", "textures/surfaces/bricksbloody.png"},
+        {"floors", "textures/surfaces/parquet.png"},
+        {"ceilings", "textures/surfaces/boards.png"}
+    };
+    
+    rm.loadResourceBatch(initialTextures);
+    
     // Загружаем шрифты
     if (!rm.loadFont(Fonts::GOTHIC_RUS, "GothicRus.ttf")) {
         std::cerr << "Failed to load Gothic font!" << std::endl;
@@ -116,6 +211,7 @@ void Game::initializeResources() {
     // Звуки
     rm.loadSound("step", "sounds/effects/step.wav");
     rm.loadSound("drops", "sounds/effects/drops.wav");
+    rm.loadSound("ambienceloop", "sounds/effects/ambienceloop.wav");
     
     // SoundFont
     rm.loadSoundFont("default", "OPL3SB.sf2");
@@ -255,7 +351,7 @@ void Game::update() {
         // Проверяем, готовы ли начать игру
         if (soundEngineer_.isAudioReady()) {
             gameReady_ = true;
-            startAmbientSounds(); // Запускаем фоновые звуки
+            startAmbientSounds();
             playBackgroundMusic();
             std::cout << "Ready to start" << std::endl;
         }
@@ -265,8 +361,8 @@ void Game::update() {
     // Основной игровой цикл (только когда игра готова)
     sf::Vector2f oldPosition = player_.position;
     
-    // Обрабатываем ввод
-    inputHandler_.handleInput(player_, deltaTime, currentLevel_.grid);
+    // Обрабатываем ввод (передаем только wallGrid для коллизий)
+    inputHandler_.handleInput(player_, deltaTime, currentLevel_.wallGrid);
     
     // Определяем, двигается ли игрок
     bool isMoving = (player_.position != oldPosition);
@@ -298,8 +394,12 @@ void Game::render() {
         // Показываем экран загрузки
         renderLoadingScreen();
     } else {
-        // Основной рендеринг игры
-        renderer_->renderFrame(player_, currentLevel_.grid, rayCaster_);
+        // Основной рендеринг игры с тремя текстурными слоями
+        renderer_->renderFrame(player_, 
+                               currentLevel_.wallGrid,
+                               currentLevel_.floorGrid,
+                               currentLevel_.ceilingGrid,
+                               rayCaster_);
     }
     
     window_.display();
@@ -341,33 +441,82 @@ void Game::loadLevel() {
     std::cout << "Loading level resources..." << std::endl;
     
     // Используем LevelProcessor для обработки уровня
-    if (LevelProcessor::processLevel("current_level", "levels/test_level.roh", soundEngineer_)) {
+    bool levelLoaded = LevelProcessor::processLevel("current_level", "levels/test_level.roh", soundEngineer_);
+    
+    if (levelLoaded) {
         currentLevel_ = LevelProcessor::getProcessedLevel("current_level");
         std::cout << "Level '" << currentLevel_.name << "' loaded and processed successfully!" << std::endl;
-    } else {
-        std::cout << "Using test level..." << std::endl;
-        auto& rm = ResourceManager::getInstance();
         
-        // Исправленная строка: разыменовываем указатель
-        std::unique_ptr<LevelData> testLevel = rm.createTestLevel();
-        if (testLevel) {
-            currentLevel_ = *testLevel;  // Копируем данные
-        } else {
-            // Fallback если создание тестового уровня не удалось
-            currentLevel_.name = "Fallback Test Level";
-            currentLevel_.grid = {
-                {1, 1, 1, 1},
-                {1, 0, 0, 1},
-                {1, 0, 0, 1},
-                {1, 1, 1, 1}
-            };
-            currentLevel_.playerStartPosition = sf::Vector2f(1.5f, 1.5f);
-            currentLevel_.playerStartDirection = sf::Vector2f(-1.0f, 0.0f);
+        // ОТЛАДКА: Выводим информацию о текстурах
+        std::cout << "Level has " << currentLevel_.wallTextures.size() << " wall textures" << std::endl;
+        std::cout << "Level has " << currentLevel_.floorTextures.size() << " floor textures" << std::endl;
+        std::cout << "Level has " << currentLevel_.ceilingTextures.size() << " ceiling textures" << std::endl;
+        std::cout << "Level has " << currentLevel_.texturePaths.size() << " texture paths" << std::endl;
+        
+        // Выводим пути к текстурам для отладки
+        for (const auto& [name, path] : currentLevel_.texturePaths) {
+            std::cout << "Texture path: " << name << " -> " << path << std::endl;
         }
         
-        // Загружаем ресурсы тестового уровня
-        LevelProcessor::loadLevelResources(currentLevel_);
+        // Проверяем, есть ли вообще текстуры
+        auto& rm = ResourceManager::getInstance();
+        if (currentLevel_.wallTextures.empty() && !rm.hasTexture("walls")) {
+            std::cout << "No wall textures available, creating fallback level..." << std::endl;
+            createFallbackLevel();
+        }
+    } else {
+        std::cout << "LevelProcessor failed, creating fallback level..." << std::endl;
+        createFallbackLevel();
     }
+}
+
+// ДОБАВЛЕН МЕТОД В КЛАСС
+void Game::createFallbackLevel() {
+    auto& rm = ResourceManager::getInstance();
+    
+    // Создаем простой уровень для отладки
+    currentLevel_.name = "Debug Fallback Level";
+    
+    // Простая сетка 4x4
+    currentLevel_.wallGrid = {
+        {1, 1, 1, 1},
+        {1, 0, 0, 1},
+        {1, 0, 0, 1},
+        {1, 1, 1, 1}
+    };
+    
+    // Пол и потолок - те же размеры
+    currentLevel_.floorGrid = std::vector<std::vector<int>>(4, std::vector<int>(4, 1));
+    currentLevel_.ceilingGrid = std::vector<std::vector<int>>(4, std::vector<int>(4, 1));
+    
+    // Пробуем загрузить текстуры напрямую через ResourceManager
+    std::vector<std::pair<std::string, std::string>> debugTextures = {
+        {"wall_1", "textures/surfaces/bricksbloody.png"},
+        {"floor_1", "textures/surfaces/parquet.png"},
+        {"ceiling_1", "textures/surfaces/boards.png"}
+    };
+    
+    bool texturesLoaded = rm.loadResourceBatch(debugTextures);
+    if (texturesLoaded) {
+        // Добавляем текстуры в уровень
+        currentLevel_.wallTextures[1] = "wall_1";
+        currentLevel_.floorTextures[1] = "floor_1";
+        currentLevel_.ceilingTextures[1] = "ceiling_1";
+        
+        // Сохраняем пути
+        for (const auto& [name, path] : debugTextures) {
+            currentLevel_.texturePaths[name] = path;
+        }
+        
+        std::cout << "Debug textures loaded successfully" << std::endl;
+    } else {
+        std::cout << "Debug textures failed to load, using color rendering" << std::endl;
+    }
+    
+    currentLevel_.playerStartPosition = sf::Vector2f(1.5f, 1.5f);
+    currentLevel_.playerStartDirection = sf::Vector2f(-1.0f, 0.0f);
+    currentLevel_.backgroundMusic = "sounds/music/Adrian'sAsleep.mid";
+    currentLevel_.ambienceSound = "sounds/effects/ambienceloop.wav";
 }
 
 void Game::loadSounds() {

@@ -50,4 +50,6 @@ private:
     void startAmbientSounds();
     void renderLoadingScreen();
     void updateLoadingScreen(float progress);
+    
+    void createFallbackLevel();
 };

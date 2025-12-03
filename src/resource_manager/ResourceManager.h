@@ -9,14 +9,22 @@
 // Структура уровня
 struct LevelData {
     std::string name;
-    std::vector<std::vector<int>> grid;
-    std::unordered_map<std::string, std::string> textures;
+    std::vector<std::vector<int>> wallGrid;
+    std::vector<std::vector<int>> floorGrid;
+    std::vector<std::vector<int>> ceilingGrid;
+    
+    // Текстуры по типам
+    std::unordered_map<int, std::string> wallTextures;
+    std::unordered_map<int, std::string> floorTextures;
+    std::unordered_map<int, std::string> ceilingTextures;
+    
     std::string backgroundMusic;
-    std::string floorTexture;
-    std::string ceilingTexture;
     std::string ambienceSound;
     sf::Vector2f playerStartPosition;
     sf::Vector2f playerStartDirection;
+    
+    // Сопоставление имен текстур с путями (для загрузки)
+    std::unordered_map<std::string, std::string> texturePaths;
 };
 
 class ResourceManager {

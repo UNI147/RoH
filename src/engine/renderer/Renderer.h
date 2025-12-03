@@ -6,8 +6,14 @@
 class Renderer {
 public:
     Renderer(sf::RenderWindow& window);
-    void renderFrame(const PlayerState& player, const std::vector<std::vector<int>>& map,
-                    RayCaster& rayCaster);
+    
+    // Основной метод рендеринга с тремя текстурными слоями
+    void renderFrame(const PlayerState& player, 
+                     const std::vector<std::vector<int>>& wallMap,
+                     const std::vector<std::vector<int>>& floorMap,
+                     const std::vector<std::vector<int>>& ceilingMap,
+                     RayCaster& rayCaster);
+    
     void setWallTexture(int wallType, const std::string& textureName);
     
     // Методы для управления высотой камеры (точки обзора)
@@ -17,6 +23,11 @@ public:
     void setFloorTexture(const std::string& textureName);
     void setCeilingTexture(const std::string& textureName);
     void addWallTexture(const std::string& textureName);
+    
+    // Новые методы для управления текстурными слоями
+    void addWallTexture(int textureId, const std::string& textureName);
+    void addFloorTexture(int textureId, const std::string& textureName);
+    void addCeilingTexture(int textureId, const std::string& textureName);
 
 private:
     sf::RenderWindow& window_;
@@ -24,7 +35,9 @@ private:
     void drawWallStrip(int x, int drawStart, int drawEnd, int side, float distance);
     void drawFloorAndCeiling(int x, int drawStart, int drawEnd);
     void drawTexturedWallStrip(int x, int drawStart, int drawEnd, const RayHit& hit, int lineHeight);
-    void drawTexturedFloorAndCeiling(const PlayerState& player, const std::vector<std::vector<int>>& map,
+    void drawTexturedFloorAndCeiling(const PlayerState& player, 
+                                    const std::vector<std::vector<int>>& floorMap,
+                                    const std::vector<std::vector<int>>& ceilingMap,
                                     RayCaster& rayCaster);
     void drawSolidFloorAndCeiling();
     
@@ -35,11 +48,11 @@ private:
     sf::Sprite renderSprite_;
     
     // Предзагруженные изображения текстур для производительности
-    sf::Image wallTextureImage_;
-    sf::Image floorTextureImage_;
-    sf::Image ceilingTextureImage_;
+    std::unordered_map<int, sf::Image> wallTextureImages_;
+    std::unordered_map<int, sf::Image> floorTextureImages_;
+    std::unordered_map<int, sf::Image> ceilingTextureImages_;
     
-    // Карта текстур для стен
+    // Карта текстур для стен (старая версия для совместимости)
     std::unordered_map<int, const sf::Texture*> wallTextures_;
     
     void updateRenderSpriteScale();
@@ -52,6 +65,7 @@ private:
     // Максимальное расстояние затемнения
     float maxDarkDistance_ = 5.0f;
     
+    // Старые имена для совместимости
     std::string floorTextureName_;
     std::string ceilingTextureName_;
     std::vector<std::string> wallTextureNames_;

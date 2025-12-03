@@ -24,13 +24,18 @@ Renderer::Renderer(sf::RenderWindow& window)
         try {
             // Пробуем загрузить любую доступную текстуру для fallback
             if (rm.hasTexture("walls")) {
-                wallTextureImage_ = rm.getTexture("walls").copyToImage();
+                // Используем временную переменную для изображения стен
+                sf::Image tempImage = rm.getTexture("walls").copyToImage();
+                // Добавляем как текстуру с ID 0 (стандартная)
+                wallTextureImages_[0] = tempImage;
             }
             if (rm.hasTexture("floors")) {
-                floorTextureImage_ = rm.getTexture("floors").copyToImage();
+                sf::Image tempImage = rm.getTexture("floors").copyToImage();
+                floorTextureImages_[0] = tempImage;
             }
             if (rm.hasTexture("ceilings")) {
-                ceilingTextureImage_ = rm.getTexture("ceilings").copyToImage();
+                sf::Image tempImage = rm.getTexture("ceilings").copyToImage();
+                ceilingTextureImages_[0] = tempImage;
             }
         } catch (const std::exception& e) {
             std::cerr << "Error preloading texture images: " << e.what() << std::endl;
@@ -51,14 +56,17 @@ float Renderer::getViewHeight() const {
     return viewHeight_;
 }
 
-void Renderer::renderFrame(const PlayerState& player, const std::vector<std::vector<int>>& map,
+void Renderer::renderFrame(const PlayerState& player, 
+                          const std::vector<std::vector<int>>& wallMap,
+                          const std::vector<std::vector<int>>& floorMap,
+                          const std::vector<std::vector<int>>& ceilingMap,
                           RayCaster& rayCaster) {
     updateRenderSpriteScale();
     renderTexture_.clear();
     
     // Сначала рендерим пол и потолок
     if (useTextures_) {
-        drawTexturedFloorAndCeiling(player, map, rayCaster);
+        drawTexturedFloorAndCeiling(player, floorMap, ceilingMap, rayCaster);
     } else {
         drawSolidFloorAndCeiling();
     }
@@ -66,7 +74,7 @@ void Renderer::renderFrame(const PlayerState& player, const std::vector<std::vec
     // Затем рендерим стены поверх
     for (int x = 0; x < RENDER_WIDTH; ++x) {
         float cameraX = 2 * x / float(RENDER_WIDTH) - 1;
-        RayHit hit = rayCaster.castRay(player, map, cameraX);
+        RayHit hit = rayCaster.castRay(player, wallMap, cameraX);
         
         // Правильный расчет высоты стены с учетом высоты обзора
         int lineHeight = static_cast<int>(RENDER_HEIGHT / hit.distance);
@@ -94,20 +102,35 @@ void Renderer::renderFrame(const PlayerState& player, const std::vector<std::vec
 void Renderer::drawTexturedWallStrip(int x, int drawStart, int drawEnd, const RayHit& hit, int lineHeight) {
     if (lineHeight <= 0) return;
     
+    // Получаем ID текстуры из позиции удара
+    int texId = 1; // По умолчанию ID 1
+    
+    // Находим соответствующее изображение текстуры
+    sf::Image* textureImage = nullptr;
+    auto it = wallTextureImages_.find(texId);
+    if (it != wallTextureImages_.end()) {
+        textureImage = &it->second;
+    } else if (!wallTextureImages_.empty()) {
+        // Fallback на первую доступную текстуру стен
+        textureImage = &wallTextureImages_.begin()->second;
+    } else {
+        return; // Нет текстур для рендеринга
+    }
+    
     // Вычисление координаты текстуры по X
-    int texWidth = static_cast<int>(wallTextureImage_.getSize().x);
+    int texWidth = static_cast<int>(textureImage->getSize().x);
     int texX = static_cast<int>(hit.wallX * static_cast<float>(texWidth));
     
     // Корректировка для предотвращения зеркального отображения
     if ((hit.side == 0 && hit.rayDirX > 0) || (hit.side == 1 && hit.rayDirY < 0)) {
-        texX = wallTextureImage_.getSize().x - texX - 1;
+        texX = textureImage->getSize().x - texX - 1;
     }
     
     // Обеспечиваем, чтобы texX был в пределах текстуры
-    texX = std::max(0, std::min(texX, static_cast<int>(wallTextureImage_.getSize().x) - 1));
+    texX = std::max(0, std::min(texX, static_cast<int>(textureImage->getSize().x) - 1));
     
     // Вычисление шага текстуры по Y
-    float step = static_cast<float>(wallTextureImage_.getSize().y) / static_cast<float>(lineHeight);
+    float step = static_cast<float>(textureImage->getSize().y) / static_cast<float>(lineHeight);
     
     // Расчет позиции текстуры с учетом высоты обзора
     float texPos = (static_cast<float>(drawStart) - static_cast<float>(RENDER_HEIGHT) * viewHeight_ + static_cast<float>(lineHeight) / 2.0f) * step;
@@ -122,10 +145,10 @@ void Renderer::drawTexturedWallStrip(int x, int drawStart, int drawEnd, const Ra
     }
     
     for (int y = drawStart; y < drawEnd; ++y) {
-        int texY = static_cast<int>(texPos) % wallTextureImage_.getSize().y;
-        texY = std::max(0, std::min(texY, static_cast<int>(wallTextureImage_.getSize().y) - 1));
+        int texY = static_cast<int>(texPos) % textureImage->getSize().y;
+        texY = std::max(0, std::min(texY, static_cast<int>(textureImage->getSize().y) - 1));
         
-        sf::Color pixelColor = wallTextureImage_.getPixel(texX, texY);
+        sf::Color pixelColor = textureImage->getPixel(texX, texY);
         
         // Применяем интенсивное затемнение
         pixelColor.r = static_cast<sf::Uint8>(static_cast<float>(pixelColor.r) * brightness);
@@ -140,7 +163,9 @@ void Renderer::drawTexturedWallStrip(int x, int drawStart, int drawEnd, const Ra
     }
 }
 
-void Renderer::drawTexturedFloorAndCeiling(const PlayerState& player, const std::vector<std::vector<int>>& map,
+void Renderer::drawTexturedFloorAndCeiling(const PlayerState& player, 
+                                          const std::vector<std::vector<int>>& floorMap,
+                                          const std::vector<std::vector<int>>& ceilingMap,
                                           RayCaster& rayCaster) {
     // Исправленный рендеринг пола и потолка с учетом высоты обзора
     int horizonLine = static_cast<int>(RENDER_HEIGHT * viewHeight_);
@@ -171,27 +196,50 @@ void Renderer::drawTexturedFloorAndCeiling(const PlayerState& player, const std:
         float floorY = player.position.y + rowDistance * rayDirY0;
         
         for (int x = 0; x < RENDER_WIDTH; ++x) {
-            // Координаты текстуры для пола
-            int floorTexX = static_cast<int>(static_cast<float>(floorTextureImage_.getSize().x) * (1.0f - (floorX - std::floor(floorX))));
-            int floorTexY = static_cast<int>(static_cast<float>(floorTextureImage_.getSize().y) * (floorY - std::floor(floorY)));
+            // Координаты в сетке
+            int cellX = static_cast<int>(floorX);
+            int cellY = static_cast<int>(floorY);
             
-            // Ограничиваем координаты текстуры
-            floorTexX = std::max(0, std::min(floorTexX, static_cast<int>(floorTextureImage_.getSize().x) - 1));
-            floorTexY = std::max(0, std::min(floorTexY, static_cast<int>(floorTextureImage_.getSize().y) - 1));
-            
-            // Интенсивное затенение для пола
-            float floorBrightness = 1.0f - (rowDistance / maxDarkDistance_);
-            floorBrightness = std::max(0.0f, std::min(1.0f, floorBrightness));
-            
-            // Цвет пола
-            sf::Color floorColor = floorTextureImage_.getPixel(floorTexX, floorTexY);
-            floorColor.r = static_cast<sf::Uint8>(static_cast<float>(floorColor.r) * floorBrightness);
-            floorColor.g = static_cast<sf::Uint8>(static_cast<float>(floorColor.g) * floorBrightness);
-            floorColor.b = static_cast<sf::Uint8>(static_cast<float>(floorColor.b) * floorBrightness);
-            
-            // Отрисовка пикселя пола
-            sf::Vertex floorPixel(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)), floorColor);
-            renderTexture_.draw(&floorPixel, 1, sf::Points);
+            if (cellY >= 0 && cellY < static_cast<int>(floorMap.size()) &&
+                cellX >= 0 && cellX < static_cast<int>(floorMap[0].size())) {
+                
+                // Получаем ID текстуры пола
+                int texId = floorMap[cellY][cellX];
+                
+                // Определяем изображение текстуры пола
+                sf::Image* floorTexImage = nullptr;
+                auto it = floorTextureImages_.find(texId);
+                if (it != floorTextureImages_.end()) {
+                    floorTexImage = &it->second;
+                } else if (!floorTextureImages_.empty()) {
+                    // Fallback на первую текстуру
+                    floorTexImage = &floorTextureImages_.begin()->second;
+                }
+                
+                if (floorTexImage) {
+                    // Координаты текстуры для пола
+                    int floorTexX = static_cast<int>(static_cast<float>(floorTexImage->getSize().x) * (floorX - std::floor(floorX)));
+                    int floorTexY = static_cast<int>(static_cast<float>(floorTexImage->getSize().y) * (floorY - std::floor(floorY)));
+                    
+                    // Ограничиваем координаты текстуры
+                    floorTexX = std::max(0, std::min(floorTexX, static_cast<int>(floorTexImage->getSize().x) - 1));
+                    floorTexY = std::max(0, std::min(floorTexY, static_cast<int>(floorTexImage->getSize().y) - 1));
+                    
+                    // Интенсивное затенение для пола
+                    float floorBrightness = 1.0f - (rowDistance / maxDarkDistance_);
+                    floorBrightness = std::max(0.0f, std::min(1.0f, floorBrightness));
+                    
+                    // Цвет пола
+                    sf::Color floorColor = floorTexImage->getPixel(floorTexX, floorTexY);
+                    floorColor.r = static_cast<sf::Uint8>(static_cast<float>(floorColor.r) * floorBrightness);
+                    floorColor.g = static_cast<sf::Uint8>(static_cast<float>(floorColor.g) * floorBrightness);
+                    floorColor.b = static_cast<sf::Uint8>(static_cast<float>(floorColor.b) * floorBrightness);
+                    
+                    // Отрисовка пикселя пола
+                    sf::Vertex floorPixel(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)), floorColor);
+                    renderTexture_.draw(&floorPixel, 1, sf::Points);
+                }
+            }
             
             floorX += floorStepX;
             floorY += floorStepY;
@@ -224,25 +272,48 @@ void Renderer::drawTexturedFloorAndCeiling(const PlayerState& player, const std:
         float ceilingY = player.position.y + rowDistance * rayDirY0;
         
         for (int x = 0; x < RENDER_WIDTH; ++x) {
-            // Координаты текстуры для потолка
-            int ceilingTexX = static_cast<int>(static_cast<float>(ceilingTextureImage_.getSize().x) * (ceilingX - std::floor(ceilingX)));
-            int ceilingTexY = static_cast<int>(static_cast<float>(ceilingTextureImage_.getSize().y) * (ceilingY - std::floor(ceilingY)));
+            // Координаты в сетке
+            int cellX = static_cast<int>(ceilingX);
+            int cellY = static_cast<int>(ceilingY);
             
-            // Ограничиваем координаты текстуры
-            ceilingTexX = std::max(0, std::min(ceilingTexX, static_cast<int>(ceilingTextureImage_.getSize().x) - 1));
-            ceilingTexY = std::max(0, std::min(ceilingTexY, static_cast<int>(ceilingTextureImage_.getSize().y) - 1));
-            
-            // Интенсивное затенение для потолка
-            float ceilingBrightness = 1.0f - (rowDistance / maxDarkDistance_);
-            ceilingBrightness = std::max(0.0f, std::min(1.0f, ceilingBrightness));
-            
-            sf::Color ceilingColor = ceilingTextureImage_.getPixel(ceilingTexX, ceilingTexY);
-            ceilingColor.r = static_cast<sf::Uint8>(static_cast<float>(ceilingColor.r) * ceilingBrightness);
-            ceilingColor.g = static_cast<sf::Uint8>(static_cast<float>(ceilingColor.g) * ceilingBrightness);
-            ceilingColor.b = static_cast<sf::Uint8>(static_cast<float>(ceilingColor.b) * ceilingBrightness);
-            
-            sf::Vertex ceilingPixel(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)), ceilingColor);
-            renderTexture_.draw(&ceilingPixel, 1, sf::Points);
+            if (cellY >= 0 && cellY < static_cast<int>(ceilingMap.size()) &&
+                cellX >= 0 && cellX < static_cast<int>(ceilingMap[0].size())) {
+                
+                // Получаем ID текстуры потолка
+                int texId = ceilingMap[cellY][cellX];
+                
+                // Определяем изображение текстуры потолка
+                sf::Image* ceilingTexImage = nullptr;
+                auto it = ceilingTextureImages_.find(texId);
+                if (it != ceilingTextureImages_.end()) {
+                    ceilingTexImage = &it->second;
+                } else if (!ceilingTextureImages_.empty()) {
+                    // Fallback на первую текстуру
+                    ceilingTexImage = &ceilingTextureImages_.begin()->second;
+                }
+                
+                if (ceilingTexImage) {
+                    // Координаты текстуры для потолка
+                    int ceilingTexX = static_cast<int>(static_cast<float>(ceilingTexImage->getSize().x) * (ceilingX - std::floor(ceilingX)));
+                    int ceilingTexY = static_cast<int>(static_cast<float>(ceilingTexImage->getSize().y) * (ceilingY - std::floor(ceilingY)));
+                    
+                    // Ограничиваем координаты текстуры
+                    ceilingTexX = std::max(0, std::min(ceilingTexX, static_cast<int>(ceilingTexImage->getSize().x) - 1));
+                    ceilingTexY = std::max(0, std::min(ceilingTexY, static_cast<int>(ceilingTexImage->getSize().y) - 1));
+                    
+                    // Интенсивное затенение для потолка
+                    float ceilingBrightness = 1.0f - (rowDistance / maxDarkDistance_);
+                    ceilingBrightness = std::max(0.0f, std::min(1.0f, ceilingBrightness));
+                    
+                    sf::Color ceilingColor = ceilingTexImage->getPixel(ceilingTexX, ceilingTexY);
+                    ceilingColor.r = static_cast<sf::Uint8>(static_cast<float>(ceilingColor.r) * ceilingBrightness);
+                    ceilingColor.g = static_cast<sf::Uint8>(static_cast<float>(ceilingColor.g) * ceilingBrightness);
+                    ceilingColor.b = static_cast<sf::Uint8>(static_cast<float>(ceilingColor.b) * ceilingBrightness);
+                    
+                    sf::Vertex ceilingPixel(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)), ceilingColor);
+                    renderTexture_.draw(&ceilingPixel, 1, sf::Points);
+                }
+            }
             
             ceilingX += ceilingStepX;
             ceilingY += ceilingStepY;
@@ -309,6 +380,7 @@ void Renderer::drawWallStrip(int x, int drawStart, int drawEnd, int side, float 
 }
 
 void Renderer::drawFloorAndCeiling(int x, int drawStart, int drawEnd) {
+    // Пустая реализация для совместимости
 }
 
 void Renderer::setWallTexture(int wallType, const std::string& textureName) {
@@ -322,7 +394,8 @@ void Renderer::setFloorTexture(const std::string& textureName) {
     floorTextureName_ = textureName;
     auto& rm = ResourceManager::getInstance();
     if (rm.hasTexture(textureName)) {
-        floorTextureImage_ = rm.getTexture(textureName).copyToImage();
+        // Добавляем как текстуру пола с ID 0
+        floorTextureImages_[0] = rm.getTexture(textureName).copyToImage();
         std::cout << "Renderer: Floor texture set to " << textureName << std::endl;
     }
 }
@@ -331,7 +404,8 @@ void Renderer::setCeilingTexture(const std::string& textureName) {
     ceilingTextureName_ = textureName;
     auto& rm = ResourceManager::getInstance();
     if (rm.hasTexture(textureName)) {
-        ceilingTextureImage_ = rm.getTexture(textureName).copyToImage();
+        // Добавляем как текстуру потолка с ID 0
+        ceilingTextureImages_[0] = rm.getTexture(textureName).copyToImage();
         std::cout << "Renderer: Ceiling texture set to " << textureName << std::endl;
     }
 }
@@ -340,10 +414,35 @@ void Renderer::addWallTexture(const std::string& textureName) {
     wallTextureNames_.push_back(textureName);
     auto& rm = ResourceManager::getInstance();
     if (rm.hasTexture(textureName)) {
-        // Используем первую текстуру стен как основную
+        // Используем первую текстуру стен как основную с ID 0
         if (wallTextureNames_.size() == 1) {
-            wallTextureImage_ = rm.getTexture(textureName).copyToImage();
+            wallTextureImages_[0] = rm.getTexture(textureName).copyToImage();
             std::cout << "Renderer: Primary wall texture set to " << textureName << std::endl;
         }
+    }
+}
+
+// Новые методы для управления текстурными слоями
+void Renderer::addWallTexture(int textureId, const std::string& textureName) {
+    auto& rm = ResourceManager::getInstance();
+    if (rm.hasTexture(textureName)) {
+        wallTextureImages_[textureId] = rm.getTexture(textureName).copyToImage();
+        std::cout << "Renderer: Wall texture ID " << textureId << " set to " << textureName << std::endl;
+    }
+}
+
+void Renderer::addFloorTexture(int textureId, const std::string& textureName) {
+    auto& rm = ResourceManager::getInstance();
+    if (rm.hasTexture(textureName)) {
+        floorTextureImages_[textureId] = rm.getTexture(textureName).copyToImage();
+        std::cout << "Renderer: Floor texture ID " << textureId << " set to " << textureName << std::endl;
+    }
+}
+
+void Renderer::addCeilingTexture(int textureId, const std::string& textureName) {
+    auto& rm = ResourceManager::getInstance();
+    if (rm.hasTexture(textureName)) {
+        ceilingTextureImages_[textureId] = rm.getTexture(textureName).copyToImage();
+        std::cout << "Renderer: Ceiling texture ID " << textureId << " set to " << textureName << std::endl;
     }
 }

@@ -1,24 +1,39 @@
-# RoH Level File
+# RoH Level File с тремя текстурными слоями
 # Формат: [SECTION] затем параметры
+
+[LEVEL]
+name "Test Dungeon"
+background_music resources/sounds/music/Adrian'sAsleep.mid
+ambience_sound sounds/effects/ambienceloop.wav
+
+[WALL_TEXTURES]
+# Формат: ID путь_к_текстуре
+1 resources/textures/surfaces/brickwall.png
+2 resources/textures/surfaces/bricksbloody.png
+3 resources/textures/surfaces/boards.png
+
+[FLOOR_TEXTURES]
+# ID путь_к_текстуре
+1 resources/textures/surfaces/parquet.png
+2 resources/textures/surfaces/carpet.png
+3 resources/textures/surfaces/boards.png
+
+[CEILING_TEXTURES]
+# ID путь_к_текстуре
+1 resources/textures/surfaces/boards.png
+2 resources/textures/surfaces/patterned.png
 
 [PLAYER]
 player 1.5 1.5 -1.0 0.0
 
-[RESOURCES]
-# type name path
-texture bricks resources/textures/surfaces/bricks.png
-texture boards resources/textures/surfaces/boards.png  
-texture parquet resources/textures/surfaces/parquet.png
-music adrians_asleep resources/sounds/music/Adrian'sAsleep.mid
-
-[GRID]
+[WALL_LAYER]
 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1
-1 0 1 0 0 1 0 0 0 1 1 1 1 1 0 1
-1 0 1 0 0 0 0 0 0 1 0 0 0 1 0 1
-1 0 0 0 0 1 0 0 0 1 0 0 0 1 0 1
-1 0 1 1 0 0 0 0 0 1 0 0 0 1 0 1
-1 0 0 0 0 0 0 0 0 1 1 0 1 1 0 1
+1 0 2 0 0 2 0 0 0 3 3 3 3 3 0 1
+1 0 2 0 0 0 0 0 0 3 0 0 0 3 0 1
+1 0 0 0 0 2 0 0 0 3 0 0 0 3 0 1
+1 0 2 2 0 0 0 0 0 3 0 0 0 3 0 1
+1 0 0 0 0 0 0 0 0 3 3 0 3 3 0 1
 1 1 1 1 1 1 1 0 0 0 0 0 0 0 0 1
 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1
 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1
@@ -28,3 +43,39 @@ music adrians_asleep resources/sounds/music/Adrian'sAsleep.mid
 1 0 0 0 0 0 1 0 1 0 1 0 1 1 0 1
 1 0 0 0 0 0 0 0 0 0 1 0 0 0 0 1
 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+
+[FLOOR_LAYER]
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0
+0 1 0 2 2 0 2 2 2 0 0 0 0 0 1 0
+0 1 0 2 2 2 2 2 2 0 3 3 3 0 1 0
+0 1 1 2 2 0 2 2 2 0 3 3 3 0 1 0
+0 1 0 0 2 2 2 2 2 0 3 3 3 0 1 0
+0 1 1 1 1 1 1 1 1 0 0 1 0 0 1 0
+0 0 0 0 0 0 0 0 0 1 1 1 1 1 0 0
+0 1 1 1 1 1 1 1 0 1 1 1 1 1 1 0
+0 1 2 2 2 2 2 1 0 1 1 1 1 1 1 0
+0 1 2 2 2 2 2 1 0 1 1 1 0 0 0 0
+0 1 2 0 0 2 0 1 0 1 0 0 0 1 1 0
+0 1 2 0 0 2 2 1 0 1 0 1 1 1 0 0
+0 1 2 2 2 2 0 1 0 1 0 1 0 0 1 0
+0 1 1 1 1 1 1 1 0 1 0 1 1 1 1 0
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+
+[CEILING_LAYER]
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0
+0 1 0 2 2 0 2 2 2 0 0 0 0 0 1 0
+0 1 0 2 2 2 2 2 2 0 1 1 1 0 1 0
+0 1 1 2 2 0 2 2 2 0 1 1 1 0 1 0
+0 1 0 0 2 2 2 2 2 0 1 1 1 0 1 0
+0 1 1 1 1 1 1 1 1 0 0 1 0 0 1 0
+0 0 0 0 0 0 0 0 0 1 1 1 1 1 0 0
+0 1 1 1 1 1 1 1 0 1 1 1 1 1 1 0
+0 1 2 2 2 2 2 1 0 1 1 1 1 1 1 0
+0 1 2 2 2 2 2 1 0 1 1 1 0 0 0 0
+0 1 2 0 0 2 0 1 0 1 0 0 0 1 1 0
+0 1 2 0 0 2 2 1 0 1 0 1 1 1 0 0
+0 1 2 2 2 2 0 1 0 1 0 1 0 0 1 0
+0 1 1 1 1 1 1 1 0 1 0 1 1 1 1 0
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
