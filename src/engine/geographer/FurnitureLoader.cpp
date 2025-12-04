@@ -96,6 +96,13 @@ bool FurnitureLoader::parseFurnitureLine(const std::string& line, FurnitureData&
         }
         return true;
     }
+    else if (key == "light_radius") {
+        float radius;
+        if (iss >> radius) {
+            furniture.lightRadius = std::max(0.0f, radius);
+        }
+        return true;
+    }
     
     return false;
 }
@@ -120,6 +127,10 @@ bool FurnitureLoader::saveFurnitureToFile(const FurnitureData& furniture, const 
          << furniture.collisionBox.y << " " 
          << furniture.collisionBox.width << " " 
          << furniture.collisionBox.height << "\n";
+    
+    if (furniture.lightRadius > 0.0f) {
+        file << "light_radius " << furniture.lightRadius << "\n";
+    }
     
     file.close();
     return true;

@@ -2,7 +2,9 @@
 #include <cmath>
 
 void InputHandler::handleInput(PlayerState& player, float deltaTime, 
-                              const std::vector<std::vector<int>>& map) {
+                              const std::vector<std::vector<int>>& map,
+                              const std::vector<FurnitureObject>& furniture,
+                              const std::unordered_map<std::string, FurnitureData>& furnitureTypes) {
     // Сохраняем старую позицию для отката при коллизии
     sf::Vector2f oldPosition = player.position;
     
@@ -19,7 +21,7 @@ void InputHandler::handleInput(PlayerState& player, float deltaTime,
         newPos.x += player.direction.x * currentMoveSpeed;
         newPos.y += player.direction.y * currentMoveSpeed;
         
-        if (canMoveTo(player, newPos, map)) {
+        if (canMoveTo(player, newPos, map, furniture, furnitureTypes)) {
             player.position = newPos;
         }
     }
@@ -30,7 +32,7 @@ void InputHandler::handleInput(PlayerState& player, float deltaTime,
         newPos.x -= player.direction.x * currentMoveSpeed;
         newPos.y -= player.direction.y * currentMoveSpeed;
         
-        if (canMoveTo(player, newPos, map)) {
+        if (canMoveTo(player, newPos, map, furniture, furnitureTypes)) {
             player.position = newPos;
         }
     }
@@ -41,7 +43,7 @@ void InputHandler::handleInput(PlayerState& player, float deltaTime,
         newPos.x -= player.direction.y * currentMoveSpeed;
         newPos.y += player.direction.x * currentMoveSpeed;
         
-        if (canMoveTo(player, newPos, map)) {
+        if (canMoveTo(player, newPos, map, furniture, furnitureTypes)) {
             player.position = newPos;
         }
     }
@@ -52,7 +54,7 @@ void InputHandler::handleInput(PlayerState& player, float deltaTime,
         newPos.x += player.direction.y * currentMoveSpeed;
         newPos.y -= player.direction.x * currentMoveSpeed;
         
-        if (canMoveTo(player, newPos, map)) {
+        if (canMoveTo(player, newPos, map, furniture, furnitureTypes)) {
             player.position = newPos;
         }
     }
@@ -89,18 +91,52 @@ void InputHandler::handleInput(PlayerState& player, float deltaTime,
 }
 
 bool InputHandler::canMoveTo(const PlayerState& player, const sf::Vector2f& newPos, 
-                            const std::vector<std::vector<int>>& map) const {
-    // Проверяем, не находится ли новая позиция внутри стены
+                            const std::vector<std::vector<int>>& map,
+                            const std::vector<FurnitureObject>& furniture,
+                            const std::unordered_map<std::string, FurnitureData>& furnitureTypes) const {
+    
+    // 1. Проверяем стены
     int mapX = static_cast<int>(newPos.x);
     int mapY = static_cast<int>(newPos.y);
     
-    // Если вышли за границы карты - запрещаем движение
     if (mapX < 0 || mapY < 0 || mapY >= map.size() || mapX >= map[0].size()) {
         return false;
     }
     
-    // Проверяем, является ли клетка стеной
-    return map[mapY][mapX] == 0;
+    if (map[mapY][mapX] != 0) {
+        return false;
+    }
+    
+    // 2. Проверяем столкновения с мебелью
+    for (const auto& obj : furniture) {
+        auto it = furnitureTypes.find(obj.furnitureType);
+        if (it != furnitureTypes.end() && !it->second.passable) {
+            const auto& data = it->second;
+            
+            // Вычисляем мировые координаты коллизионной коробки
+            float collisionX = obj.position.x + data.collisionBox.x - data.collisionBox.width/2;
+            float collisionY = obj.position.y + data.collisionBox.y - data.collisionBox.height/2;
+            float collisionWidth = data.collisionBox.width;
+            float collisionHeight = data.collisionBox.height;
+            
+            // Проверяем коллизию с новой позицией игрока
+            float playerRadius = 0.2f;
+            
+            // Проверяем пересечение окружности (игрок) с прямоугольником (мебель)
+            float closestX = std::max(collisionX, std::min(newPos.x, collisionX + collisionWidth));
+            float closestY = std::max(collisionY, std::min(newPos.y, collisionY + collisionHeight));
+            
+            float distanceX = newPos.x - closestX;
+            float distanceY = newPos.y - closestY;
+            float distanceSquared = distanceX * distanceX + distanceY * distanceY;
+            
+            if (distanceSquared < (playerRadius * playerRadius)) {
+                return false;
+            }
+        }
+    }
+    
+    return true;
 }
 
 float InputHandler::getCurrentMoveSpeed() const {

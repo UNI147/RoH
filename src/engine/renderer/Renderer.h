@@ -127,4 +127,16 @@ private:
                                 const std::vector<float>& depthBuffer);
                                 
     const std::vector<std::vector<int>>* currentWallMap_ = nullptr;
+    
+    // Светящиеся объекты для расчета освещения
+    struct LightSource {
+        sf::Vector2f position;
+        float radius;
+        float intensity;
+    };
+    std::vector<LightSource> lightSources_;
+    
+    // Метод для сбора источников света
+    void collectLightSources(const std::vector<FurnitureObject>& furniture,
+                           const std::unordered_map<std::string, FurnitureData>& furnitureTypes);
 };

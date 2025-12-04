@@ -13,6 +13,7 @@ struct FurnitureData {
     bool transparent = false;
     float yOffset = 0.0f;
     sf::Vector2f pivot = {0.5f, 1.0f};
+    float lightRadius = 0.0f;
     
     // Свойства для столкновений
     struct CollisionBox {

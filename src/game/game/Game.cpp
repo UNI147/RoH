@@ -361,8 +361,11 @@ void Game::update() {
     // Основной игровой цикл (только когда игра готова)
     sf::Vector2f oldPosition = player_.position;
     
-    // Обрабатываем ввод (передаем только wallGrid для коллизий)
-    inputHandler_.handleInput(player_, deltaTime, currentLevel_.wallGrid);
+    // Обрабатываем ввод
+    inputHandler_.handleInput(player_, deltaTime, 
+                              currentLevel_.wallGrid,
+                              currentLevel_.furnitureObjects,
+                              currentLevel_.furnitureTypes);
     
     // Определяем, двигается ли игрок
     bool isMoving = (player_.position != oldPosition);
@@ -543,4 +546,35 @@ void Game::loadSounds() {
     if (!rm.hasSound("drops")) {
         std::cerr << "Warning: Drops sound not loaded" << std::endl;
     }
+}
+
+bool Game::checkFurnitureCollision(const sf::Vector2f& position) const {
+    for (const auto& obj : currentLevel_.furnitureObjects) {
+        auto it = currentLevel_.furnitureTypes.find(obj.furnitureType);
+        if (it != currentLevel_.furnitureTypes.end() && !it->second.passable) {
+            const auto& data = it->second;
+            
+            // Вычисляем мировые координаты коллизионной коробки
+            float boxX = obj.position.x + data.collisionBox.x - data.collisionBox.width/2;
+            float boxY = obj.position.y + data.collisionBox.y - data.collisionBox.height/2;
+            float boxWidth = data.collisionBox.width;
+            float boxHeight = data.collisionBox.height;
+            
+            // Проверяем пересечение с небольшой зоной вокруг игрока
+            float playerRadius = 0.2f;
+            
+            // Находим ближайшую точку на прямоугольнике к позиции игрока
+            float closestX = std::max(boxX, std::min(position.x, boxX + boxWidth));
+            float closestY = std::max(boxY, std::min(position.y, boxY + boxHeight));
+            
+            float distanceX = position.x - closestX;
+            float distanceY = position.y - closestY;
+            float distanceSquared = distanceX * distanceX + distanceY * distanceY;
+            
+            if (distanceSquared < (playerRadius * playerRadius)) {
+                return true;
+            }
+        }
+    }
+    return false;
 }

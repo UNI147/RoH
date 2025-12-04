@@ -133,13 +133,37 @@ void Renderer::drawTexturedWallStrip(int x, int drawStart, int drawEnd,
     float texPos = (static_cast<float>(drawStart) - static_cast<float>(RENDER_HEIGHT) * viewHeight_ + static_cast<float>(lineHeight) / 2.0f) * step;
     
     // Интенсивное затенение
-    float brightness = 1.0f - (hit.distance / maxDarkDistance_);
-    brightness = std::max(0.0f, std::min(1.0f, brightness));
+    float distanceBrightness = 1.0f - (hit.distance / maxDarkDistance_);
+    distanceBrightness = std::max(0.0f, std::min(1.0f, distanceBrightness));
     
     // Дополнительное затемнение для Y-сторон
     if (hit.side == 1) {
-        brightness *= 0.7f;
+        distanceBrightness *= 0.7f;
     }
+    
+    // Добавляем освещение от источников света (если есть)
+    float lightBrightness = 0.0f;
+    if (!lightSources_.empty()) {
+        // Позиция стены в мире
+        float wallX = hit.mapX + hit.wallX;
+        float wallY = hit.mapY + (1.0f - hit.wallX);
+        
+        for (const auto& light : lightSources_) {
+            float lightDist = std::sqrt(
+                (wallX - light.position.x) * (wallX - light.position.x) +
+                (wallY - light.position.y) * (wallY - light.position.y)
+            );
+            
+            if (lightDist < light.radius) {
+                float lightIntensity = 1.0f - (lightDist / light.radius);
+                lightIntensity *= light.intensity;
+                lightBrightness = std::max(lightBrightness, lightIntensity);
+            }
+        }
+    }
+    
+    float brightness = distanceBrightness + lightBrightness;
+    brightness = std::max(0.3f, std::min(1.0f, brightness));
     
     for (int y = drawStart; y < drawEnd; ++y) {
         int texY = static_cast<int>(texPos) % textureImage->getSize().y;
@@ -164,7 +188,8 @@ void Renderer::drawTexturedFloorAndCeiling(const PlayerState& player,
                                           const std::vector<std::vector<int>>& floorMap,
                                           const std::vector<std::vector<int>>& ceilingMap,
                                           RayCaster& rayCaster) {
-    // Исправленный рендеринг пола и потолка с учетом высоты обзора
+    
+    // Рендеринг пола и потолка с учетом высоты обзора
     int horizonLine = static_cast<int>(RENDER_HEIGHT * viewHeight_);
     
     // Рендерим пол (ниже горизонта)
@@ -226,11 +251,35 @@ void Renderer::drawTexturedFloorAndCeiling(const PlayerState& player,
                     float floorBrightness = 1.0f - (rowDistance / maxDarkDistance_);
                     floorBrightness = std::max(0.0f, std::min(1.0f, floorBrightness));
                     
+                    // ДОБАВЛЯЕМ ОСВЕЩЕНИЕ ДЛЯ ПОЛА
+                    float floorLightBrightness = 0.0f;
+                    if (!lightSources_.empty()) {
+                        float floorWorldX = floorX;
+                        float floorWorldY = floorY;
+                        
+                        for (const auto& light : lightSources_) {
+                            float lightDist = std::sqrt(
+                                (floorWorldX - light.position.x) * (floorWorldX - light.position.x) +
+                                (floorWorldY - light.position.y) * (floorWorldY - light.position.y)
+                            );
+                            
+                            if (lightDist < light.radius) {
+                                float lightIntensity = 1.0f - (lightDist / light.radius);
+                                lightIntensity *= light.intensity;
+                                floorLightBrightness = std::max(floorLightBrightness, lightIntensity);
+                            }
+                        }
+                    }
+                    
+                    // Итоговая яркость пола
+                    float finalFloorBrightness = floorBrightness + floorLightBrightness;
+                    finalFloorBrightness = std::max(0.3f, std::min(1.0f, finalFloorBrightness));
+                    
                     // Цвет пола
                     sf::Color floorColor = floorTexImage->getPixel(floorTexX, floorTexY);
-                    floorColor.r = static_cast<sf::Uint8>(static_cast<float>(floorColor.r) * floorBrightness);
-                    floorColor.g = static_cast<sf::Uint8>(static_cast<float>(floorColor.g) * floorBrightness);
-                    floorColor.b = static_cast<sf::Uint8>(static_cast<float>(floorColor.b) * floorBrightness);
+                    floorColor.r = static_cast<sf::Uint8>(static_cast<float>(floorColor.r) * finalFloorBrightness);
+                    floorColor.g = static_cast<sf::Uint8>(static_cast<float>(floorColor.g) * finalFloorBrightness);
+                    floorColor.b = static_cast<sf::Uint8>(static_cast<float>(floorColor.b) * finalFloorBrightness);
                     
                     // Отрисовка пикселя пола
                     sf::Vertex floorPixel(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)), floorColor);
@@ -503,7 +552,22 @@ void Renderer::renderFurniture(const PlayerState& player,
     renderFurnitureWithDepth(player, furniture, furnitureTypes, depthBuffer);
 }
 
-// Внутренний метод с учетом Z-буфера
+void Renderer::collectLightSources(const std::vector<FurnitureObject>& furniture,
+                                 const std::unordered_map<std::string, FurnitureData>& furnitureTypes) {
+    lightSources_.clear();
+    
+    for (const auto& obj : furniture) {
+        auto it = furnitureTypes.find(obj.furnitureType);
+        if (it != furnitureTypes.end() && it->second.lightRadius > 0.0f) {
+            LightSource light;
+            light.position = obj.position;
+            light.radius = it->second.lightRadius;
+            light.intensity = 1.0f;
+            lightSources_.push_back(light);
+        }
+    }
+}
+
 void Renderer::renderFurnitureWithDepth(const PlayerState& player,
                                       const std::vector<FurnitureObject>& furniture,
                                       const std::unordered_map<std::string, FurnitureData>& furnitureTypes,
@@ -512,6 +576,9 @@ void Renderer::renderFurnitureWithDepth(const PlayerState& player,
     if (!useTextures_ || furniture.empty() || furnitureTextureImages_.empty()) {
         return;
     }
+    
+    // Собираем источники света
+    collectLightSources(furniture, furnitureTypes);
     
     std::vector<std::pair<float, const FurnitureObject*>> sortedFurniture;
     
@@ -548,7 +615,6 @@ void Renderer::renderFurnitureWithDepth(const PlayerState& player,
         const auto& obj = *objPtr;
         const auto& data = furnitureTypes.at(obj.furnitureType);
         
-        // Передаем правильные параметры
         drawFurnitureSpriteWithDepth(obj, data, player, distance, 0.0f, depthBuffer);
     }
 }
@@ -641,8 +707,34 @@ void Renderer::drawFurnitureSpriteWithDepth(const FurnitureObject& obj,
     float texYOffset = (clipStartY - drawStartY) * stepY;
     
     // 9. Затемнение в зависимости от расстояния
-    float brightness = 1.0f - (distance / maxDarkDistance_);
+    float distanceBrightness = 1.0f - (distance / maxDarkDistance_);
+    distanceBrightness = std::max(0.0f, std::min(1.0f, distanceBrightness));
+    
+    // 9а. Расчет освещения от источников света
+    float lightBrightness = 0.0f;
+    for (const auto& light : lightSources_) {
+        // Расстояние от объекта до источника света
+        float lightDist = std::sqrt(
+            (obj.position.x - light.position.x) * (obj.position.x - light.position.x) +
+            (obj.position.y - light.position.y) * (obj.position.y - light.position.y)
+        );
+        
+        if (lightDist < light.radius) {
+            // Освещение уменьшается с расстоянием
+            float lightIntensity = 1.0f - (lightDist / light.radius);
+            lightIntensity *= light.intensity;
+            lightBrightness = std::max(lightBrightness, lightIntensity);
+        }
+    }
+    
+    // 9б. Итоговая яркость: затемнение + освещение
+    float brightness = distanceBrightness + lightBrightness;
     brightness = std::max(0.3f, std::min(1.0f, brightness));
+    
+    // Для светящихся объектов увеличиваем минимальную яркость
+    if (data.lightRadius > 0.0f) {
+        brightness = std::max(0.7f, brightness);
+    }
     
     // 10. Подготавливаем вращение объекта
     bool useRotation = std::abs(obj.rotation) > 0.01f;

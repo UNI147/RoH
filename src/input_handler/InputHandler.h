@@ -2,10 +2,14 @@
 #include <SFML/Window/Keyboard.hpp>
 #include "../engine/raycasting/RayCaster.h"
 #include <vector>
+#include "../geographer/Furniture.h"
 
 class InputHandler {
 public:
-    void handleInput(PlayerState& player, float deltaTime, const std::vector<std::vector<int>>& map);
+    void handleInput(PlayerState& player, float deltaTime, 
+                     const std::vector<std::vector<int>>& map,
+                     const std::vector<FurnitureObject>& furniture,
+                     const std::unordered_map<std::string, FurnitureData>& furnitureTypes);
     bool isRunning() const { return isRunning_; }
 
 private:
@@ -16,7 +20,9 @@ private:
     bool isRunning_ = false;
     
     bool canMoveTo(const PlayerState& player, const sf::Vector2f& newPos, 
-                  const std::vector<std::vector<int>>& map) const;
+                  const std::vector<std::vector<int>>& map,
+                  const std::vector<FurnitureObject>& furniture,
+                  const std::unordered_map<std::string, FurnitureData>& furnitureTypes) const;
     
     float getCurrentMoveSpeed() const;
 };

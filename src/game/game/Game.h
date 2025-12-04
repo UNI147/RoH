@@ -52,4 +52,6 @@ private:
     void updateLoadingScreen(float progress);
     
     void createFallbackLevel();
+    
+    bool checkFurnitureCollision(const sf::Vector2f& position) const;
 };
