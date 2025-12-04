@@ -139,4 +139,8 @@ private:
     // Метод для сбора источников света
     void collectLightSources(const std::vector<FurnitureObject>& furniture,
                            const std::unordered_map<std::string, FurnitureData>& furnitureTypes);
+    
+    // Метод для проверки видимости света
+    bool isLightVisible(const sf::Vector2f& lightPos, const sf::Vector2f& targetPos,
+                       const std::vector<std::vector<int>>& wallMap) const;
 };

@@ -132,38 +132,21 @@ void Renderer::drawTexturedWallStrip(int x, int drawStart, int drawEnd,
     // Расчет позиции текстуры с учетом высоты обзора
     float texPos = (static_cast<float>(drawStart) - static_cast<float>(RENDER_HEIGHT) * viewHeight_ + static_cast<float>(lineHeight) / 2.0f) * step;
     
-    // Интенсивное затенение
-    float distanceBrightness = 1.0f - (hit.distance / maxDarkDistance_);
-    distanceBrightness = std::max(0.0f, std::min(1.0f, distanceBrightness));
+    // Расстояние затемнение - уменьшаем максимальное расстояние для более сильного затемнения
+    float distanceBrightness = 1.0f - std::min(1.0f, hit.distance / maxDarkDistance_);
+    distanceBrightness = std::max(0.0f, distanceBrightness);
     
     // Дополнительное затемнение для Y-сторон
+    float sideDarkness = 1.0f;
     if (hit.side == 1) {
-        distanceBrightness *= 0.7f;
+        sideDarkness = 0.7f;
     }
     
-    // Добавляем освещение от источников света (если есть)
-    float lightBrightness = 0.0f;
-    if (!lightSources_.empty()) {
-        // Позиция стены в мире
-        float wallX = hit.mapX + hit.wallX;
-        float wallY = hit.mapY + (1.0f - hit.wallX);
-        
-        for (const auto& light : lightSources_) {
-            float lightDist = std::sqrt(
-                (wallX - light.position.x) * (wallX - light.position.x) +
-                (wallY - light.position.y) * (wallY - light.position.y)
-            );
-            
-            if (lightDist < light.radius) {
-                float lightIntensity = 1.0f - (lightDist / light.radius);
-                lightIntensity *= light.intensity;
-                lightBrightness = std::max(lightBrightness, lightIntensity);
-            }
-        }
-    }
+    // Базовое затемнение
+    float baseBrightness = distanceBrightness * sideDarkness;
     
-    float brightness = distanceBrightness + lightBrightness;
-    brightness = std::max(0.3f, std::min(1.0f, brightness));
+    // Используем currentWallMap_ для проверки препятствий
+    const std::vector<std::vector<int>>* wallMapPtr = currentWallMap_;
     
     for (int y = drawStart; y < drawEnd; ++y) {
         int texY = static_cast<int>(texPos) % textureImage->getSize().y;
@@ -171,10 +154,54 @@ void Renderer::drawTexturedWallStrip(int x, int drawStart, int drawEnd,
         
         sf::Color pixelColor = textureImage->getPixel(texX, texY);
         
-        // Применяем интенсивное затемнение
-        pixelColor.r = static_cast<sf::Uint8>(static_cast<float>(pixelColor.r) * brightness);
-        pixelColor.g = static_cast<sf::Uint8>(static_cast<float>(pixelColor.g) * brightness);
-        pixelColor.b = static_cast<sf::Uint8>(static_cast<float>(pixelColor.b) * brightness);
+        // Изначальная яркость - только расстояние и сторона
+        float brightness = baseBrightness;
+        
+        // Добавляем освещение от источников света (с проверкой препятствий)
+        if (!lightSources_.empty() && wallMapPtr) {
+            // Позиция стены в мире
+            float wallWorldX = hit.mapX + hit.wallX;
+            float wallWorldY = hit.mapY + (1.0f - hit.wallX);
+            
+            for (const auto& light : lightSources_) {
+                // Проверяем расстояние
+                float lightDist = std::sqrt(
+                    (wallWorldX - light.position.x) * (wallWorldX - light.position.x) +
+                    (wallWorldY - light.position.y) * (wallWorldY - light.position.y)
+                );
+                
+                if (lightDist < light.radius) {
+                    // Проверяем, не блокирован ли свет стеной
+                    if (isLightVisible(light.position, 
+                                       sf::Vector2f(wallWorldX, wallWorldY), 
+                                       *wallMapPtr)) {
+                        
+                        // Квадратичное затухание для более реалистичного света
+                        float lightIntensity = 1.0f - (lightDist / light.radius);
+                        lightIntensity = lightIntensity * lightIntensity;
+                        lightIntensity *= light.intensity;
+                        
+                        // Ограничиваем максимальную яркость от источников света
+                        lightIntensity = std::min(1.5f, lightIntensity);
+                        
+                        // Учитываем угол падения света (для реалистичности)
+                        brightness = std::max(brightness, lightIntensity);
+                    }
+                }
+            }
+        }
+        
+        // Ограничиваем итоговую яркость - разрешаем полную темноту (0.0f)
+        brightness = std::max(0.0f, std::min(2.0f, brightness));
+        
+        // Применяем яркость к цвету с защитой от переполнения
+        float r = static_cast<float>(pixelColor.r) * brightness;
+        float g = static_cast<float>(pixelColor.g) * brightness;
+        float b = static_cast<float>(pixelColor.b) * brightness;
+        
+        pixelColor.r = static_cast<sf::Uint8>(std::min(255.0f, r));
+        pixelColor.g = static_cast<sf::Uint8>(std::min(255.0f, g));
+        pixelColor.b = static_cast<sf::Uint8>(std::min(255.0f, b));
         
         // Рисуем один пиксель
         sf::Vertex pixel(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)), pixelColor);
@@ -188,6 +215,10 @@ void Renderer::drawTexturedFloorAndCeiling(const PlayerState& player,
                                           const std::vector<std::vector<int>>& floorMap,
                                           const std::vector<std::vector<int>>& ceilingMap,
                                           RayCaster& rayCaster) {
+    
+    // Сохраняем карту стен для проверки освещения
+    const std::vector<std::vector<int>>* wallMapPtr = currentWallMap_;
+    if (!wallMapPtr) return;
     
     // Рендеринг пола и потолка с учетом высоты обзора
     int horizonLine = static_cast<int>(RENDER_HEIGHT * viewHeight_);
@@ -247,13 +278,13 @@ void Renderer::drawTexturedFloorAndCeiling(const PlayerState& player,
                     floorTexX = std::max(0, std::min(floorTexX, static_cast<int>(floorTexImage->getSize().x) - 1));
                     floorTexY = std::max(0, std::min(floorTexY, static_cast<int>(floorTexImage->getSize().y) - 1));
                     
-                    // Интенсивное затенение для пола
-                    float floorBrightness = 1.0f - (rowDistance / maxDarkDistance_);
-                    floorBrightness = std::max(0.0f, std::min(1.0f, floorBrightness));
+                    // Базовое затенение пола - разрешаем полную темноту
+                    float floorBrightness = 1.0f - std::min(1.0f, rowDistance / maxDarkDistance_);
+                    floorBrightness = std::max(0.0f, floorBrightness);
                     
-                    // ДОБАВЛЯЕМ ОСВЕЩЕНИЕ ДЛЯ ПОЛА
+                    // ОСВЕЩЕНИЕ ДЛЯ ПОЛА С ПРОВЕРКОЙ ПРЕПЯТСТВИЙ
                     float floorLightBrightness = 0.0f;
-                    if (!lightSources_.empty()) {
+                    if (!lightSources_.empty() && wallMapPtr) {
                         float floorWorldX = floorX;
                         float floorWorldY = floorY;
                         
@@ -264,22 +295,34 @@ void Renderer::drawTexturedFloorAndCeiling(const PlayerState& player,
                             );
                             
                             if (lightDist < light.radius) {
-                                float lightIntensity = 1.0f - (lightDist / light.radius);
-                                lightIntensity *= light.intensity;
-                                floorLightBrightness = std::max(floorLightBrightness, lightIntensity);
+                                // ПРОВЕРЯЕМ, НЕ БЛОКИРОВАН ЛИ СВЕТ
+                                if (isLightVisible(light.position, 
+                                                   sf::Vector2f(floorWorldX, floorWorldY), 
+                                                   *wallMapPtr)) {
+                                    
+                                    // Квадратичное затухание
+                                    float lightIntensity = 1.0f - (lightDist / light.radius);
+                                    lightIntensity = lightIntensity * lightIntensity;
+                                    lightIntensity *= light.intensity;
+                                    floorLightBrightness = std::max(floorLightBrightness, lightIntensity);
+                                }
                             }
                         }
                     }
                     
-                    // Итоговая яркость пола
+                    // Итоговая яркость пола - СУММИРУЕМ затемнение и освещение
                     float finalFloorBrightness = floorBrightness + floorLightBrightness;
-                    finalFloorBrightness = std::max(0.3f, std::min(1.0f, finalFloorBrightness));
+                    finalFloorBrightness = std::max(0.0f, std::min(2.0f, finalFloorBrightness));
                     
-                    // Цвет пола
+                    // Цвет пола с защитой от переполнения
                     sf::Color floorColor = floorTexImage->getPixel(floorTexX, floorTexY);
-                    floorColor.r = static_cast<sf::Uint8>(static_cast<float>(floorColor.r) * finalFloorBrightness);
-                    floorColor.g = static_cast<sf::Uint8>(static_cast<float>(floorColor.g) * finalFloorBrightness);
-                    floorColor.b = static_cast<sf::Uint8>(static_cast<float>(floorColor.b) * finalFloorBrightness);
+                    float r = static_cast<float>(floorColor.r) * finalFloorBrightness;
+                    float g = static_cast<float>(floorColor.g) * finalFloorBrightness;
+                    float b = static_cast<float>(floorColor.b) * finalFloorBrightness;
+                    
+                    floorColor.r = static_cast<sf::Uint8>(std::min(255.0f, r));
+                    floorColor.g = static_cast<sf::Uint8>(std::min(255.0f, g));
+                    floorColor.b = static_cast<sf::Uint8>(std::min(255.0f, b));
                     
                     // Отрисовка пикселя пола
                     sf::Vertex floorPixel(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)), floorColor);
@@ -347,14 +390,50 @@ void Renderer::drawTexturedFloorAndCeiling(const PlayerState& player,
                     ceilingTexX = std::max(0, std::min(ceilingTexX, static_cast<int>(ceilingTexImage->getSize().x) - 1));
                     ceilingTexY = std::max(0, std::min(ceilingTexY, static_cast<int>(ceilingTexImage->getSize().y) - 1));
                     
-                    // Интенсивное затенение для потолка
-                    float ceilingBrightness = 1.0f - (rowDistance / maxDarkDistance_);
-                    ceilingBrightness = std::max(0.0f, std::min(1.0f, ceilingBrightness));
+                    // Базовое затенение для потолка - разрешаем полную темноту
+                    float ceilingBrightness = 1.0f - std::min(1.0f, rowDistance / maxDarkDistance_);
+                    ceilingBrightness = std::max(0.0f, ceilingBrightness);
+                    
+                    // ОСВЕЩЕНИЕ ДЛЯ ПОТОЛКА С ПРОВЕРКОЙ ПРЕПЯТСТВИЙ
+                    float ceilingLightBrightness = 0.0f;
+                    if (!lightSources_.empty() && wallMapPtr) {
+                        float ceilingWorldX = ceilingX;
+                        float ceilingWorldY = ceilingY;
+                        
+                        for (const auto& light : lightSources_) {
+                            float lightDist = std::sqrt(
+                                (ceilingWorldX - light.position.x) * (ceilingWorldX - light.position.x) +
+                                (ceilingWorldY - light.position.y) * (ceilingWorldY - light.position.y)
+                            );
+                            
+                            if (lightDist < light.radius) {
+                                // ПРОВЕРЯЕМ, НЕ БЛОКИРОВАН ЛИ СВЕТ
+                                if (isLightVisible(light.position, 
+                                                   sf::Vector2f(ceilingWorldX, ceilingWorldY), 
+                                                   *wallMapPtr)) {
+                                    
+                                    // Квадратичное затухание
+                                    float lightIntensity = 1.0f - (lightDist / light.radius);
+                                    lightIntensity = lightIntensity * lightIntensity;
+                                    lightIntensity *= light.intensity;
+                                    ceilingLightBrightness = std::max(ceilingLightBrightness, lightIntensity);
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Итоговая яркость потолка
+                    float finalCeilingBrightness = ceilingBrightness + ceilingLightBrightness;
+                    finalCeilingBrightness = std::max(0.0f, std::min(2.0f, finalCeilingBrightness));
                     
                     sf::Color ceilingColor = ceilingTexImage->getPixel(ceilingTexX, ceilingTexY);
-                    ceilingColor.r = static_cast<sf::Uint8>(static_cast<float>(ceilingColor.r) * ceilingBrightness);
-                    ceilingColor.g = static_cast<sf::Uint8>(static_cast<float>(ceilingColor.g) * ceilingBrightness);
-                    ceilingColor.b = static_cast<sf::Uint8>(static_cast<float>(ceilingColor.b) * ceilingBrightness);
+                    float r = static_cast<float>(ceilingColor.r) * finalCeilingBrightness;
+                    float g = static_cast<float>(ceilingColor.g) * finalCeilingBrightness;
+                    float b = static_cast<float>(ceilingColor.b) * finalCeilingBrightness;
+                    
+                    ceilingColor.r = static_cast<sf::Uint8>(std::min(255.0f, r));
+                    ceilingColor.g = static_cast<sf::Uint8>(std::min(255.0f, g));
+                    ceilingColor.b = static_cast<sf::Uint8>(std::min(255.0f, b));
                     
                     sf::Vertex ceilingPixel(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)), ceilingColor);
                     renderTexture_.draw(&ceilingPixel, 1, sf::Points);
@@ -657,7 +736,7 @@ void Renderer::drawFurnitureSpriteWithDepth(const FurnitureObject& obj,
     float transformX = invDet * (player.direction.y * dx - player.direction.x * dy);
     float transformY = invDet * (-player.plane.y * dx + player.plane.x * dy);
     
-    if (transformY <= 0) return; // Объект позади камеры
+    if (transformY <= 0) return;
     
     // 3. Вычисляем экранную координату X
     int spriteScreenX = static_cast<int>((RENDER_WIDTH / 2) * (1 + transformX / transformY));
@@ -706,11 +785,14 @@ void Renderer::drawFurnitureSpriteWithDepth(const FurnitureObject& obj,
     float texXOffset = (clipStartX - drawStartX) * stepX;
     float texYOffset = (clipStartY - drawStartY) * stepY;
     
-    // 9. Затемнение в зависимости от расстояния
-    float distanceBrightness = 1.0f - (distance / maxDarkDistance_);
-    distanceBrightness = std::max(0.0f, std::min(1.0f, distanceBrightness));
+    // Получаем карту стен
+    const std::vector<std::vector<int>>* wallMapPtr = currentWallMap_;
     
-    // 9а. Расчет освещения от источников света
+    // 9. Затемнение в зависимости от расстояния - разрешаем полную темноту
+    float distanceBrightness = 1.0f - std::min(1.0f, distance / maxDarkDistance_);
+    distanceBrightness = std::max(0.0f, distanceBrightness);
+    
+    // 9а. Расчет освещения от источников света С ПРОВЕРКОЙ ПРЕПЯТСТВИЙ
     float lightBrightness = 0.0f;
     for (const auto& light : lightSources_) {
         // Расстояние от объекта до источника света
@@ -720,20 +802,30 @@ void Renderer::drawFurnitureSpriteWithDepth(const FurnitureObject& obj,
         );
         
         if (lightDist < light.radius) {
-            // Освещение уменьшается с расстоянием
-            float lightIntensity = 1.0f - (lightDist / light.radius);
-            lightIntensity *= light.intensity;
-            lightBrightness = std::max(lightBrightness, lightIntensity);
+            // ПРОВЕРЯЕМ, НЕ БЛОКИРОВАН ЛИ СВЕТ СТЕНОЙ
+            bool lightVisible = true;
+            if (wallMapPtr) {
+                lightVisible = isLightVisible(light.position, obj.position, *wallMapPtr);
+            }
+            
+            if (lightVisible) {
+                // Квадратичное затухание
+                float lightIntensity = 1.0f - (lightDist / light.radius);
+                lightIntensity = lightIntensity * lightIntensity;
+                lightIntensity *= light.intensity;
+                lightBrightness = std::max(lightBrightness, lightIntensity);
+            }
         }
     }
     
     // 9б. Итоговая яркость: затемнение + освещение
     float brightness = distanceBrightness + lightBrightness;
-    brightness = std::max(0.3f, std::min(1.0f, brightness));
+    brightness = std::max(0.0f, std::min(2.0f, brightness));
     
     // Для светящихся объектов увеличиваем минимальную яркость
     if (data.lightRadius > 0.0f) {
-        brightness = std::max(0.7f, brightness);
+        // Но не заставляем их светиться, если они должны быть темными
+        brightness = std::max(brightness, 0.3f);
     }
     
     // 10. Подготавливаем вращение объекта
@@ -782,10 +874,14 @@ void Renderer::drawFurnitureSpriteWithDepth(const FurnitureObject& obj,
             // Пропускаем прозрачные пиксели
             if (pixelColor.a < 10) continue;
             
-            // Применяем затемнение
-            pixelColor.r = static_cast<sf::Uint8>(static_cast<float>(pixelColor.r) * brightness);
-            pixelColor.g = static_cast<sf::Uint8>(static_cast<float>(pixelColor.g) * brightness);
-            pixelColor.b = static_cast<sf::Uint8>(static_cast<float>(pixelColor.b) * brightness);
+            // Применяем затемнение с защитой от переполнения
+            float r = static_cast<float>(pixelColor.r) * brightness;
+            float g = static_cast<float>(pixelColor.g) * brightness;
+            float b = static_cast<float>(pixelColor.b) * brightness;
+            
+            pixelColor.r = static_cast<sf::Uint8>(std::min(255.0f, r));
+            pixelColor.g = static_cast<sf::Uint8>(std::min(255.0f, g));
+            pixelColor.b = static_cast<sf::Uint8>(std::min(255.0f, b));
             
             // Применяем цветовой оттенок
             if (obj.tint != sf::Color::White) {
@@ -800,6 +896,38 @@ void Renderer::drawFurnitureSpriteWithDepth(const FurnitureObject& obj,
             renderTexture_.draw(&pixel, 1, sf::Points);
         }
     }
+}
+
+bool Renderer::isLightVisible(const sf::Vector2f& lightPos, const sf::Vector2f& targetPos,
+                             const std::vector<std::vector<int>>& wallMap) const {
+    // Проверяем, виден ли источник света из целевой точки
+    float dx = lightPos.x - targetPos.x;
+    float dy = lightPos.y - targetPos.y;
+    float distance = std::sqrt(dx*dx + dy*dy);
+    
+    if (distance < 0.01f) return true;
+    
+    float step = 0.1f;
+    int steps = static_cast<int>(distance / step);
+    
+    for (int i = 1; i < steps; ++i) {
+        float t = static_cast<float>(i) / static_cast<float>(steps);
+        float checkX = targetPos.x + dx * t;
+        float checkY = targetPos.y + dy * t;
+        
+        int mapX = static_cast<int>(checkX);
+        int mapY = static_cast<int>(checkY);
+        
+        // Проверяем, не является ли клетка стеной
+        if (mapY >= 0 && mapY < static_cast<int>(wallMap.size()) &&
+            mapX >= 0 && mapX < static_cast<int>(wallMap[0].size())) {
+            if (wallMap[mapY][mapX] != 0) {
+                return false;
+            }
+        }
+    }
+    
+    return true;
 }
 
 // Старый метод для совместимости (используется в других частях кода)
