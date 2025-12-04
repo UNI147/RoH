@@ -143,4 +143,6 @@ private:
     // Метод для проверки видимости света
     bool isLightVisible(const sf::Vector2f& lightPos, const sf::Vector2f& targetPos,
                        const std::vector<std::vector<int>>& wallMap) const;
+    
+    bool isPointInSameCell(float worldX, float worldY, int cellX, int cellY) const;
 };

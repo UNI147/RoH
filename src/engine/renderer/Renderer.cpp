@@ -160,26 +160,60 @@ void Renderer::drawTexturedWallStrip(int x, int drawStart, int drawEnd,
         // Добавляем освещение от источников света (с проверкой препятствий)
         if (!lightSources_.empty() && wallMapPtr) {
             // Позиция стены в мире
-            float wallWorldX = hit.mapX + hit.wallX;
-            float wallWorldY = hit.mapY + (1.0f - hit.wallX);
+            float wallWorldX = hit.mapX + 0.5f; // Используем центр клетки для проверки
+            float wallWorldY = hit.mapY + 0.5f;
+            
+            // Для Y-сторон корректируем позицию
+            if (hit.side == 1) {
+                if (hit.rayDirY > 0) wallWorldY -= 0.5f;
+                else wallWorldY += 0.5f;
+            } else {
+                if (hit.rayDirX > 0) wallWorldX -= 0.5f;
+                else wallWorldX += 0.5f;
+            }
             
             for (const auto& light : lightSources_) {
-                // Проверяем расстояние
-                float lightDist = std::sqrt(
-                    (wallWorldX - light.position.x) * (wallWorldX - light.position.x) +
-                    (wallWorldY - light.position.y) * (wallWorldY - light.position.y)
-                );
+                // Проверяем расстояние до центра клетки
+                float dx = wallWorldX - light.position.x;
+                float dy = wallWorldY - light.position.y;
+                float lightDistSq = dx*dx + dy*dy;
                 
-                if (lightDist < light.radius) {
-                    // Проверяем, не блокирован ли свет стеной
+                if (lightDistSq < light.radius * light.radius) {
+                    float lightDist = std::sqrt(lightDistSq);
+                    
+                    // Проверяем несколько точек на стене
+                    bool lightVisible = false;
+                    
+                    // Основная проверка (быстрая) - от центра клетки
                     if (isLightVisible(light.position, 
-                                       sf::Vector2f(wallWorldX, wallWorldY), 
-                                       *wallMapPtr)) {
+                                    sf::Vector2f(wallWorldX, wallWorldY), 
+                                    *wallMapPtr)) {
+                        lightVisible = true;
+                    } else {
+                        // Если свет не виден из центра, проверяем ближайший угол
+                        float closestCornerX = (light.position.x < wallWorldX) ? 
+                            wallWorldX - 0.4f : wallWorldX + 0.4f;
+                        float closestCornerY = (light.position.y < wallWorldY) ? 
+                            wallWorldY - 0.4f : wallWorldY + 0.4f;
                         
+                        if (isLightVisible(light.position,
+                                        sf::Vector2f(closestCornerX, closestCornerY),
+                                        *wallMapPtr)) {
+                            lightVisible = true;
+                        }
+                    }
+                    
+                    if (lightVisible) {
                         // Квадратичное затухание для более реалистичного света
                         float lightIntensity = 1.0f - (lightDist / light.radius);
                         lightIntensity = lightIntensity * lightIntensity;
                         lightIntensity *= light.intensity;
+                        
+                        // Для угловых стен уменьшаем интенсивность
+                        if (!isPointInSameCell(wallWorldX, wallWorldY, 
+                                            hit.mapX, hit.mapY)) {
+                            lightIntensity *= 0.7f;
+                        }
                         
                         // Ограничиваем максимальную яркость от источников света
                         lightIntensity = std::min(1.5f, lightIntensity);
@@ -900,23 +934,32 @@ void Renderer::drawFurnitureSpriteWithDepth(const FurnitureObject& obj,
 
 bool Renderer::isLightVisible(const sf::Vector2f& lightPos, const sf::Vector2f& targetPos,
                              const std::vector<std::vector<int>>& wallMap) const {
-    // Проверяем, виден ли источник света из целевой точки
+    // Проверка видимости света с учетом геометрии стен
+    
     float dx = lightPos.x - targetPos.x;
     float dy = lightPos.y - targetPos.y;
     float distance = std::sqrt(dx*dx + dy*dy);
     
-    if (distance < 0.01f) return true;
+    if (distance < 0.1f) return true;
     
-    float step = 0.1f;
-    int steps = static_cast<int>(distance / step);
+    // Нормализуем вектор направления
+    float stepX = dx / distance;
+    float stepY = dy / distance;
     
-    for (int i = 1; i < steps; ++i) {
-        float t = static_cast<float>(i) / static_cast<float>(steps);
-        float checkX = targetPos.x + dx * t;
-        float checkY = targetPos.y + dy * t;
-        
-        int mapX = static_cast<int>(checkX);
-        int mapY = static_cast<int>(checkY);
+    // Количество шагов зависит от расстояния, но с минимальным/максимальным значением
+    int maxSteps = static_cast<int>(distance * 10.0f);
+    maxSteps = std::max(5, std::min(50, maxSteps));
+    
+    float currentX = targetPos.x;
+    float currentY = targetPos.y;
+    
+    float startOffset = 0.15f;
+    currentX += stepX * startOffset;
+    currentY += stepY * startOffset;
+    
+    for (int i = 0; i < maxSteps; ++i) {
+        int mapX = static_cast<int>(currentX);
+        int mapY = static_cast<int>(currentY);
         
         // Проверяем, не является ли клетка стеной
         if (mapY >= 0 && mapY < static_cast<int>(wallMap.size()) &&
@@ -925,9 +968,25 @@ bool Renderer::isLightVisible(const sf::Vector2f& lightPos, const sf::Vector2f& 
                 return false;
             }
         }
+        
+        // Переходим к следующей точке
+        currentX += stepX * 0.1f;
+        currentY += stepY * 0.1f;
+        
+        // Прерываем, если прошли всё расстояние
+        float traveled = (i + 1) * 0.1f + startOffset;
+        if (traveled >= distance) {
+            break;
+        }
     }
     
     return true;
+}
+
+bool Renderer::isPointInSameCell(float worldX, float worldY, int cellX, int cellY) const {
+    // Проверяет, находится ли точка в той же клетке карты
+    return static_cast<int>(worldX) == cellX && 
+           static_cast<int>(worldY) == cellY;
 }
 
 // Старый метод для совместимости (используется в других частях кода)
