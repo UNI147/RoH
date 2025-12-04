@@ -2,6 +2,7 @@
 #include <cmath>
 #include <iostream>
 #include <algorithm>
+#include <limits>
 #include "resource_manager/ResourceManager.h"
 #ifndef M_PI
 #define M_PI 3.14159265358979323846f
@@ -40,6 +41,10 @@ void Renderer::renderFrame(const PlayerState& player,
                           const std::vector<std::vector<int>>& floorMap,
                           const std::vector<std::vector<int>>& ceilingMap,
                           RayCaster& rayCaster) {
+    
+    // Сохраняем текущую карту стен для Z-буфера мебели
+    currentWallMap_ = &wallMap;
+    
     updateRenderSpriteScale();
     renderTexture_.clear();
     
@@ -50,13 +55,21 @@ void Renderer::renderFrame(const PlayerState& player,
         drawSolidFloorAndCeiling();
     }
     
-    // Затем рендерим стены поверх
+    // Создаем буфер глубины для стен
+    std::vector<float> wallDepthBuffer(RENDER_WIDTH);
+    
+    // Сначала рендерим стены и заполняем буфер глубины
     for (int x = 0; x < RENDER_WIDTH; ++x) {
         float cameraX = 2 * x / float(RENDER_WIDTH) - 1;
         RayHit hit = rayCaster.castRay(player, wallMap, cameraX);
         
+        // Используем перпендикулярное расстояние для предотвращения искажений
+        float perpWallDist = hit.distance;
+        
+        wallDepthBuffer[x] = perpWallDist;
+        
         // Правильный расчет высоты стены с учетом высоты обзора
-        int lineHeight = static_cast<int>(RENDER_HEIGHT / hit.distance);
+        int lineHeight = static_cast<int>(RENDER_HEIGHT / perpWallDist);
         
         // Расчет: viewHeight_ смещает точку обзора
         int horizonLine = static_cast<int>(RENDER_HEIGHT * viewHeight_);
@@ -69,7 +82,7 @@ void Renderer::renderFrame(const PlayerState& player,
         if (useTextures_ && hasTextures()) {
             drawTexturedWallStrip(x, drawStart, drawEnd, hit, lineHeight);
         } else {
-            drawWallStrip(x, drawStart, drawEnd, hit.side, hit.distance);
+            drawWallStrip(x, drawStart, drawEnd, hit.side, perpWallDist);
         }
     }
 }
@@ -467,23 +480,39 @@ void Renderer::renderFurniture(const PlayerState& player,
                               RayCaster& rayCaster) {
     
     if (!useTextures_ || furniture.empty() || furnitureTextureImages_.empty()) {
-        std::cout << "Renderer: Furniture rendering skipped - textures disabled or no furniture" << std::endl;
         return;
     }
     
-    std::cout << "Renderer: Starting furniture rendering for " << furniture.size() << " objects" << std::endl;
+    // Проверяем, есть ли текущая карта стен
+    if (!currentWallMap_) {
+        std::cout << "Renderer: Warning - no current wall map for furniture rendering" << std::endl;
+        return;
+    }
     
-    renderFurnitureInternal(player, furniture, furnitureTypes);
+    // Создаем буфер глубины для правильного рендеринга
+    std::vector<float> depthBuffer(RENDER_WIDTH, std::numeric_limits<float>::max());
+    
+    // Заполняем буфер глубины стенами (разыменовываем указатель)
+    for (int x = 0; x < RENDER_WIDTH; ++x) {
+        float cameraX = 2 * x / float(RENDER_WIDTH) - 1;
+        RayHit hit = rayCaster.castRay(player, *currentWallMap_, cameraX);
+        depthBuffer[x] = hit.distance;
+    }
+    
+    // Теперь рендерим мебель с учетом буфера глубины
+    renderFurnitureWithDepth(player, furniture, furnitureTypes, depthBuffer);
 }
 
-// Внутренний метод рендеринга:
-void Renderer::renderFurnitureInternal(const PlayerState& player,
+// Внутренний метод с учетом Z-буфера
+void Renderer::renderFurnitureWithDepth(const PlayerState& player,
                                       const std::vector<FurnitureObject>& furniture,
-                                      const std::unordered_map<std::string, FurnitureData>& furnitureTypes) {
+                                      const std::unordered_map<std::string, FurnitureData>& furnitureTypes,
+                                      const std::vector<float>& depthBuffer) {
     
-    float playerAngle = std::atan2(player.direction.y, player.direction.x);
+    if (!useTextures_ || furniture.empty() || furnitureTextureImages_.empty()) {
+        return;
+    }
     
-    // Сортируем мебель по расстоянию (от дальних к ближним)
     std::vector<std::pair<float, const FurnitureObject*>> sortedFurniture;
     
     for (const auto& obj : furniture) {
@@ -494,11 +523,19 @@ void Renderer::renderFurnitureInternal(const PlayerState& player,
         // Отбрасываем слишком далекие объекты
         if (distance > 20.0f) continue;
         
+        // Проверяем, есть ли тип мебели
+        if (furnitureTypes.find(obj.furnitureType) == furnitureTypes.end()) {
+            continue;
+        }
+        
+        // Проверяем, находится ли объект перед камерой
+        float dot = dx * player.direction.x + dy * player.direction.y;
+        if (dot <= 0) continue;
+        
         sortedFurniture.emplace_back(distance, &obj);
     }
     
     if (sortedFurniture.empty()) {
-        std::cout << "Renderer: No furniture in view distance" << std::endl;
         return;
     }
     
@@ -506,19 +543,13 @@ void Renderer::renderFurnitureInternal(const PlayerState& player,
     std::sort(sortedFurniture.begin(), sortedFurniture.end(),
               [](const auto& a, const auto& b) { return a.first > b.first; });
     
-    std::cout << "Renderer: Rendering " << sortedFurniture.size() << " furniture objects" << std::endl;
-    
     // Рендерим каждый объект
     for (const auto& [distance, objPtr] : sortedFurniture) {
         const auto& obj = *objPtr;
+        const auto& data = furnitureTypes.at(obj.furnitureType);
         
-        auto it = furnitureTypes.find(obj.furnitureType);
-        if (it == furnitureTypes.end()) {
-            std::cout << "Renderer: Furniture type not found: " << obj.furnitureType << std::endl;
-            continue;
-        }
-        
-        drawFurnitureSprite(obj, it->second, player, distance, playerAngle);
+        // Передаем правильные параметры
+        drawFurnitureSpriteWithDepth(obj, data, player, distance, 0.0f, depthBuffer);
     }
 }
 
@@ -531,108 +562,166 @@ void Renderer::addFurnitureTexture(const std::string& furnitureName, const std::
     }
 }
 
-void Renderer::drawFurnitureSprite(const FurnitureObject& obj, 
+// Метод с Z-буфером
+void Renderer::drawFurnitureSpriteWithDepth(const FurnitureObject& obj, 
                                    const FurnitureData& data,
                                    const PlayerState& player,
                                    float distance,
-                                   float playerAngle) {
+                                   float playerAngle,
+                                   const std::vector<float>& depthBuffer) {
     
     if (distance < 0.1f) return;
     
-    auto it = furnitureTextureImages_.find(obj.furnitureType);
-    if (it == furnitureTextureImages_.end()) {
-        std::cout << "Renderer: Furniture texture not found for type: " << obj.furnitureType << std::endl;
+    // Получаем текстуру
+    auto textureIt = furnitureTextureImages_.find(obj.furnitureType);
+    if (textureIt == furnitureTextureImages_.end()) {
         return;
     }
     
-    const sf::Image& textureImage = it->second;
+    const sf::Image& textureImage = textureIt->second;
     
-    // Вычисляем угол между игроком и объектом
+    // 1. Вычисляем вектор от игрока к объекту
     float dx = obj.position.x - player.position.x;
     float dy = obj.position.y - player.position.y;
-    float objectAngle = std::atan2(dy, dx);
-    float angleToPlayer = objectAngle - playerAngle;
     
-    // Нормализуем угол
-    while (angleToPlayer > M_PI) angleToPlayer -= 2.0f * M_PI;
-    while (angleToPlayer < -M_PI) angleToPlayer += 2.0f * M_PI;
+    // 2. Вычисляем трансформированную позицию объекта относительно направления камеры
+    float invDet = 1.0f / (player.plane.x * player.direction.y - player.direction.x * player.plane.y);
     
-    // Проверяем, находится ли объект в поле зрения (60 градусов)
-    const float FOV = M_PI / 3.0f;
-    if (std::abs(angleToPlayer) > FOV / 2.0f) {
-        return; // Объект вне поля зрения
-    }
+    // Вектор от камеры к объекту
+    float transformX = invDet * (player.direction.y * dx - player.direction.x * dy);
+    float transformY = invDet * (-player.plane.y * dx + player.plane.x * dy);
     
-    // Рассчитываем высоту спрайта на экране
-    int spriteHeight = static_cast<int>(RENDER_HEIGHT * data.height / distance);
-    if (spriteHeight <= 1) return;
+    if (transformY <= 0) return; // Объект позади камеры
     
-    // Рассчитываем ширину спрайта (сохраняя пропорции)
-    int spriteWidth = static_cast<int>(spriteHeight * data.width / data.height);
-    if (spriteWidth <= 1) return;
+    // 3. Вычисляем экранную координату X
+    int spriteScreenX = static_cast<int>((RENDER_WIDTH / 2) * (1 + transformX / transformY));
     
-    // Рассчитываем экранную координату X
-    float screenX = static_cast<float>(RENDER_WIDTH) / 2.0f * 
-                   (1.0f + angleToPlayer / (FOV / 2.0f));
+    // 4. Рассчитываем высоту и ширину спрайта на экране
+    int spriteHeight = std::abs(static_cast<int>(RENDER_HEIGHT / transformY));
+    int spriteWidth = spriteHeight * data.width / data.height;
     
-    int drawStartX = static_cast<int>(screenX - spriteWidth / 2.0f);
+    // Если размер слишком мал, не рисуем
+    if (spriteHeight < 1 || spriteWidth < 1) return;
+    
+    // 5. Вычисляем границы отрисовки по X
+    int drawStartX = spriteScreenX - spriteWidth / 2;
     int drawEndX = drawStartX + spriteWidth;
     
     // Если спрайт полностью за пределами экрана, пропускаем
     if (drawStartX >= RENDER_WIDTH || drawEndX <= 0) return;
     
-    // Рассчитываем экранную координату Y
+    // 6. Вычисляем границы отрисовки по Y
     int horizonLine = static_cast<int>(RENDER_HEIGHT * viewHeight_);
     int drawStartY = horizonLine - spriteHeight / 2;
     int drawEndY = drawStartY + spriteHeight;
     
-    // Применяем yOffset (положительный = вниз, отрицательный = вверх)
-    drawStartY += static_cast<int>(data.yOffset * spriteHeight);
-    drawEndY += static_cast<int>(data.yOffset * spriteHeight);
+    // Применяем вертикальное смещение (yOffset)
+    int yOffset = static_cast<int>(data.yOffset * spriteHeight);
+    drawStartY += yOffset;
+    drawEndY += yOffset;
     
     // Если спрайт полностью за пределами экрана по Y, пропускаем
     if (drawStartY >= RENDER_HEIGHT || drawEndY <= 0) return;
     
-    // Рассчитываем шаги текстур
-    float stepX = static_cast<float>(textureImage.getSize().x) / static_cast<float>(spriteWidth);
-    float stepY = static_cast<float>(textureImage.getSize().y) / static_cast<float>(spriteHeight);
-    
-    // Интенсивное затенение
-    float brightness = 1.0f - (distance / maxDarkDistance_);
-    brightness = std::max(0.3f, std::min(1.0f, brightness));
-    
-    // Определяем границы отрисовки
+    // 7. Определяем фактическую область отрисовки (клиппинг)
     int clipStartX = std::max(0, drawStartX);
     int clipEndX = std::min(RENDER_WIDTH, drawEndX);
     int clipStartY = std::max(0, drawStartY);
     int clipEndY = std::min(RENDER_HEIGHT, drawEndY);
     
-    // Рисуем спрайт
+    // 8. Вычисляем начальные координаты текстуры
+    int texWidth = textureImage.getSize().x;
+    int texHeight = textureImage.getSize().y;
+    
+    float stepX = static_cast<float>(texWidth) / static_cast<float>(spriteWidth);
+    float stepY = static_cast<float>(texHeight) / static_cast<float>(spriteHeight);
+    
+    // Корректируем начальную текстуру для усеченного спрайта
+    float texXOffset = (clipStartX - drawStartX) * stepX;
+    float texYOffset = (clipStartY - drawStartY) * stepY;
+    
+    // 9. Затемнение в зависимости от расстояния
+    float brightness = 1.0f - (distance / maxDarkDistance_);
+    brightness = std::max(0.3f, std::min(1.0f, brightness));
+    
+    // 10. Подготавливаем вращение объекта
+    bool useRotation = std::abs(obj.rotation) > 0.01f;
+    float rad = obj.rotation * M_PI / 180.0f;
+    float cosA = std::cos(rad);
+    float sinA = std::sin(rad);
+    float centerX = texWidth / 2.0f;
+    float centerY = texHeight / 2.0f;
+    
+    // 11. Рисуем пиксели с проверкой Z-буфера
     for (int y = clipStartY; y < clipEndY; ++y) {
-        float texY = (y - drawStartY) * stepY;
-        if (texY < 0 || texY >= textureImage.getSize().y) continue;
-        
-        int texYInt = static_cast<int>(texY);
+        float texY = texYOffset + (y - clipStartY) * stepY;
         
         for (int x = clipStartX; x < clipEndX; ++x) {
-            float texX = (x - drawStartX) * stepX;
-            if (texX < 0 || texX >= textureImage.getSize().x) continue;
+            // Пропускаем если стена ближе
+            if (depthBuffer[x] < transformY - 0.1f) continue;
             
-            int texXInt = static_cast<int>(texX);
+            float texX = texXOffset + (x - clipStartX) * stepX;
+            
+            int texXInt, texYInt;
+            
+            // Применяем вращение если нужно
+            if (useRotation) {
+                float relX = texX - centerX;
+                float relY = texY - centerY;
+                
+                float rotatedX = relX * cosA - relY * sinA + centerX;
+                float rotatedY = relX * sinA + relY * cosA + centerY;
+                
+                // Проверяем границы после вращения
+                if (rotatedX >= 0 && rotatedX < texWidth &&
+                    rotatedY >= 0 && rotatedY < texHeight) {
+                    texXInt = static_cast<int>(rotatedX);
+                    texYInt = static_cast<int>(rotatedY);
+                } else {
+                    continue;
+                }
+            } else {
+                texXInt = static_cast<int>(texX);
+                texYInt = static_cast<int>(texY);
+            }
             
             sf::Color pixelColor = textureImage.getPixel(texXInt, texYInt);
             
-            // Пропускаем полностью прозрачные пиксели
-            if (pixelColor.a == 0) continue;
+            // Пропускаем прозрачные пиксели
+            if (pixelColor.a < 10) continue;
             
             // Применяем затемнение
             pixelColor.r = static_cast<sf::Uint8>(static_cast<float>(pixelColor.r) * brightness);
             pixelColor.g = static_cast<sf::Uint8>(static_cast<float>(pixelColor.g) * brightness);
             pixelColor.b = static_cast<sf::Uint8>(static_cast<float>(pixelColor.b) * brightness);
             
+            // Применяем цветовой оттенок
+            if (obj.tint != sf::Color::White) {
+                pixelColor.r = static_cast<sf::Uint8>(pixelColor.r * obj.tint.r / 255);
+                pixelColor.g = static_cast<sf::Uint8>(pixelColor.g * obj.tint.g / 255);
+                pixelColor.b = static_cast<sf::Uint8>(pixelColor.b * obj.tint.b / 255);
+                pixelColor.a = static_cast<sf::Uint8>(pixelColor.a * obj.tint.a / 255);
+            }
+            
             // Рисуем пиксель
             sf::Vertex pixel(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)), pixelColor);
             renderTexture_.draw(&pixel, 1, sf::Points);
         }
     }
+}
+
+// Старый метод для совместимости (используется в других частях кода)
+void Renderer::drawFurnitureSprite(const FurnitureObject& obj, 
+                                   const FurnitureData& data,
+                                   const PlayerState& player,
+                                   float distance,
+                                   float angleToPlayer) {
+    // Пустая реализация для совместимости
+}
+
+// Старый метод для совместимости
+void Renderer::renderFurnitureInternal(const PlayerState& player,
+                                      const std::vector<FurnitureObject>& furniture,
+                                      const std::unordered_map<std::string, FurnitureData>& furnitureTypes) {
+    // Пустая реализация для совместимости
 }

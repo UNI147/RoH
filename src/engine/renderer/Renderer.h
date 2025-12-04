@@ -1,6 +1,8 @@
 #pragma once
 #include <SFML/Graphics.hpp>
 #include <unordered_map>
+#include <vector>
+#include <string>
 #include "../raycasting/RayCaster.h"
 #include "../geographer/Furniture.h"
 #include <iostream>
@@ -110,4 +112,19 @@ private:
     void renderFurnitureInternal(const PlayerState& player,
                                 const std::vector<FurnitureObject>& furniture,
                                 const std::unordered_map<std::string, FurnitureData>& furnitureTypes);
+    
+    // Новые методы с Z-буфером (переименованы для избежания конфликтов)
+    void drawFurnitureSpriteWithDepth(const FurnitureObject& obj, 
+                                   const FurnitureData& data,
+                                   const PlayerState& player,
+                                   float distance,
+                                   float playerAngle,
+                                   const std::vector<float>& depthBuffer);
+    
+    void renderFurnitureWithDepth(const PlayerState& player,
+                                const std::vector<FurnitureObject>& furniture,
+                                const std::unordered_map<std::string, FurnitureData>& furnitureTypes,
+                                const std::vector<float>& depthBuffer);
+                                
+    const std::vector<std::vector<int>>* currentWallMap_ = nullptr;
 };

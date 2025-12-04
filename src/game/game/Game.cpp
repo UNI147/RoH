@@ -400,7 +400,7 @@ void Game::render() {
                                currentLevel_.ceilingGrid,
                                rayCaster_);
         
-        // === РЕНДЕРИМ МЕБЕЛЬ ПОСЛЕ СТЕН ===
+        // Теперь рендерим мебель
         if (renderer_->hasTextures() && !currentLevel_.furnitureObjects.empty()) {
             renderer_->renderFurniture(player_,
                                        currentLevel_.furnitureObjects,
