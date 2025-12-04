@@ -27,6 +27,14 @@ link_directories("${SFML_ROOT}/lib")
 
 # Включение директорий проекта
 include_directories(src)
+include_directories(src/engine)
+include_directories(src/engine/geographer)
+include_directories(src/engine/renderer)
+include_directories(src/engine/raycasting)
+include_directories(src/resource_manager)
+include_directories(src/sound_engineer)
+include_directories(src/input_handler)
+include_directories(src/game/game)
 
 # Явное указание путей vcpkg
 set(VCPKG_ROOT "C:/vcpkg")
@@ -73,6 +81,9 @@ add_executable(game
     src/engine/geographer/MapLoader.h
     src/engine/geographer/LevelProcessor.cpp
     src/engine/geographer/LevelProcessor.h
+    src/engine/geographer/FurnitureLoader.cpp
+    src/engine/geographer/FurnitureLoader.h
+    src/engine/geographer/Furniture.h
     src/sound_engineer/SoundEngineer.cpp
     src/sound_engineer/SoundEngineer.h
     src/resource_manager/ResourceManager.cpp

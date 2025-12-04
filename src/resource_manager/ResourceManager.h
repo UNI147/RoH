@@ -5,6 +5,7 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include "../geographer/Furniture.h"
 
 // Структура уровня
 struct LevelData {
@@ -25,11 +26,16 @@ struct LevelData {
     
     // Сопоставление имен текстур с путями (для загрузки)
     std::unordered_map<std::string, std::string> texturePaths;
+    
+    // Статические объекты (мебель)
+    std::vector<FurnitureObject> furnitureObjects;
+    
+    // Загруженные типы мебели для этого уровня
+    std::unordered_map<std::string, FurnitureData> furnitureTypes;
 };
 
 class ResourceManager {
 public:
-    static ResourceManager& getInstance();
     
     // Загрузка текстур
     bool loadTexture(const std::string& name, const std::string& filename);
@@ -77,6 +83,16 @@ public:
         return basePath_ + relativePath;
     }
     
+    // Загрузка файлов мебели (.fur)
+    bool loadFurniture(const std::string& name, const std::string& filename);
+    const FurnitureData& getFurniture(const std::string& name) const;
+    bool hasFurniture(const std::string& name) const;
+    
+    static ResourceManager& getInstance() {
+        static ResourceManager instance;
+        return instance;
+    }
+    
     // Утилиты
     std::string getFileExtension(const std::string& filename) const;
         
@@ -84,8 +100,6 @@ public:
     void clear();
 
 private:
-    ResourceManager() = default;
-    ~ResourceManager() = default;
     
     std::unordered_map<std::string, std::unique_ptr<sf::Texture>> textures_;
     std::unordered_map<std::string, std::unique_ptr<sf::Font>> fonts_;
@@ -100,6 +114,13 @@ private:
     std::unordered_map<std::string, std::unique_ptr<LevelData>> levels_;
     
     std::string basePath_ = "resources/";
+    
+    // Файлы мебели
+    std::unordered_map<std::string, std::unique_ptr<FurnitureData>> furniture_;
+    
+    // Запрещаем копирование
+    ResourceManager() = default;
+    ~ResourceManager() = default;
     
     // Запрещаем копирование
     ResourceManager(const ResourceManager&) = delete;

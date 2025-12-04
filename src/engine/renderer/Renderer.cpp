@@ -3,6 +3,12 @@
 #include <iostream>
 #include <algorithm>
 #include "resource_manager/ResourceManager.h"
+#ifndef M_PI
+#define M_PI 3.14159265358979323846f
+#endif
+#ifndef M_PI_2
+#define M_PI_2 1.57079632679489661923f
+#endif
 
 Renderer::Renderer(sf::RenderWindow& window) 
     : window_(window) {
@@ -66,7 +72,10 @@ void Renderer::renderFrame(const PlayerState& player,
             drawWallStrip(x, drawStart, drawEnd, hit.side, hit.distance);
         }
     }
-    
+}
+
+// Метод для отображения всего:
+void Renderer::display() {
     renderTexture_.display();
     window_.clear(sf::Color::Black);
     window_.draw(renderSprite_);
@@ -449,4 +458,181 @@ size_t Renderer::getCeilingTextureCount() const {
 
 void Renderer::setUseTextures(bool use) {
     useTextures_ = use;
+}
+
+
+void Renderer::renderFurniture(const PlayerState& player,
+                              const std::vector<FurnitureObject>& furniture,
+                              const std::unordered_map<std::string, FurnitureData>& furnitureTypes,
+                              RayCaster& rayCaster) {
+    
+    if (!useTextures_ || furniture.empty() || furnitureTextureImages_.empty()) {
+        std::cout << "Renderer: Furniture rendering skipped - textures disabled or no furniture" << std::endl;
+        return;
+    }
+    
+    std::cout << "Renderer: Starting furniture rendering for " << furniture.size() << " objects" << std::endl;
+    
+    renderFurnitureInternal(player, furniture, furnitureTypes);
+}
+
+// Внутренний метод рендеринга:
+void Renderer::renderFurnitureInternal(const PlayerState& player,
+                                      const std::vector<FurnitureObject>& furniture,
+                                      const std::unordered_map<std::string, FurnitureData>& furnitureTypes) {
+    
+    float playerAngle = std::atan2(player.direction.y, player.direction.x);
+    
+    // Сортируем мебель по расстоянию (от дальних к ближним)
+    std::vector<std::pair<float, const FurnitureObject*>> sortedFurniture;
+    
+    for (const auto& obj : furniture) {
+        float dx = obj.position.x - player.position.x;
+        float dy = obj.position.y - player.position.y;
+        float distance = std::sqrt(dx*dx + dy*dy);
+        
+        // Отбрасываем слишком далекие объекты
+        if (distance > 20.0f) continue;
+        
+        sortedFurniture.emplace_back(distance, &obj);
+    }
+    
+    if (sortedFurniture.empty()) {
+        std::cout << "Renderer: No furniture in view distance" << std::endl;
+        return;
+    }
+    
+    // Сортировка от дальних к ближним (painter's algorithm)
+    std::sort(sortedFurniture.begin(), sortedFurniture.end(),
+              [](const auto& a, const auto& b) { return a.first > b.first; });
+    
+    std::cout << "Renderer: Rendering " << sortedFurniture.size() << " furniture objects" << std::endl;
+    
+    // Рендерим каждый объект
+    for (const auto& [distance, objPtr] : sortedFurniture) {
+        const auto& obj = *objPtr;
+        
+        auto it = furnitureTypes.find(obj.furnitureType);
+        if (it == furnitureTypes.end()) {
+            std::cout << "Renderer: Furniture type not found: " << obj.furnitureType << std::endl;
+            continue;
+        }
+        
+        drawFurnitureSprite(obj, it->second, player, distance, playerAngle);
+    }
+}
+
+void Renderer::addFurnitureTexture(const std::string& furnitureName, const std::string& textureName) {
+    auto& rm = ResourceManager::getInstance();
+    if (rm.hasTexture(textureName)) {
+        furnitureTextureImages_[furnitureName] = rm.getTexture(textureName).copyToImage();
+        std::cout << "Renderer: Furniture texture " << furnitureName 
+                << " set to " << textureName << std::endl;
+    }
+}
+
+void Renderer::drawFurnitureSprite(const FurnitureObject& obj, 
+                                   const FurnitureData& data,
+                                   const PlayerState& player,
+                                   float distance,
+                                   float playerAngle) {
+    
+    if (distance < 0.1f) return;
+    
+    auto it = furnitureTextureImages_.find(obj.furnitureType);
+    if (it == furnitureTextureImages_.end()) {
+        std::cout << "Renderer: Furniture texture not found for type: " << obj.furnitureType << std::endl;
+        return;
+    }
+    
+    const sf::Image& textureImage = it->second;
+    
+    // Вычисляем угол между игроком и объектом
+    float dx = obj.position.x - player.position.x;
+    float dy = obj.position.y - player.position.y;
+    float objectAngle = std::atan2(dy, dx);
+    float angleToPlayer = objectAngle - playerAngle;
+    
+    // Нормализуем угол
+    while (angleToPlayer > M_PI) angleToPlayer -= 2.0f * M_PI;
+    while (angleToPlayer < -M_PI) angleToPlayer += 2.0f * M_PI;
+    
+    // Проверяем, находится ли объект в поле зрения (60 градусов)
+    const float FOV = M_PI / 3.0f;
+    if (std::abs(angleToPlayer) > FOV / 2.0f) {
+        return; // Объект вне поля зрения
+    }
+    
+    // Рассчитываем высоту спрайта на экране
+    int spriteHeight = static_cast<int>(RENDER_HEIGHT * data.height / distance);
+    if (spriteHeight <= 1) return;
+    
+    // Рассчитываем ширину спрайта (сохраняя пропорции)
+    int spriteWidth = static_cast<int>(spriteHeight * data.width / data.height);
+    if (spriteWidth <= 1) return;
+    
+    // Рассчитываем экранную координату X
+    float screenX = static_cast<float>(RENDER_WIDTH) / 2.0f * 
+                   (1.0f + angleToPlayer / (FOV / 2.0f));
+    
+    int drawStartX = static_cast<int>(screenX - spriteWidth / 2.0f);
+    int drawEndX = drawStartX + spriteWidth;
+    
+    // Если спрайт полностью за пределами экрана, пропускаем
+    if (drawStartX >= RENDER_WIDTH || drawEndX <= 0) return;
+    
+    // Рассчитываем экранную координату Y
+    int horizonLine = static_cast<int>(RENDER_HEIGHT * viewHeight_);
+    int drawStartY = horizonLine - spriteHeight / 2;
+    int drawEndY = drawStartY + spriteHeight;
+    
+    // Применяем yOffset (положительный = вниз, отрицательный = вверх)
+    drawStartY += static_cast<int>(data.yOffset * spriteHeight);
+    drawEndY += static_cast<int>(data.yOffset * spriteHeight);
+    
+    // Если спрайт полностью за пределами экрана по Y, пропускаем
+    if (drawStartY >= RENDER_HEIGHT || drawEndY <= 0) return;
+    
+    // Рассчитываем шаги текстур
+    float stepX = static_cast<float>(textureImage.getSize().x) / static_cast<float>(spriteWidth);
+    float stepY = static_cast<float>(textureImage.getSize().y) / static_cast<float>(spriteHeight);
+    
+    // Интенсивное затенение
+    float brightness = 1.0f - (distance / maxDarkDistance_);
+    brightness = std::max(0.3f, std::min(1.0f, brightness));
+    
+    // Определяем границы отрисовки
+    int clipStartX = std::max(0, drawStartX);
+    int clipEndX = std::min(RENDER_WIDTH, drawEndX);
+    int clipStartY = std::max(0, drawStartY);
+    int clipEndY = std::min(RENDER_HEIGHT, drawEndY);
+    
+    // Рисуем спрайт
+    for (int y = clipStartY; y < clipEndY; ++y) {
+        float texY = (y - drawStartY) * stepY;
+        if (texY < 0 || texY >= textureImage.getSize().y) continue;
+        
+        int texYInt = static_cast<int>(texY);
+        
+        for (int x = clipStartX; x < clipEndX; ++x) {
+            float texX = (x - drawStartX) * stepX;
+            if (texX < 0 || texX >= textureImage.getSize().x) continue;
+            
+            int texXInt = static_cast<int>(texX);
+            
+            sf::Color pixelColor = textureImage.getPixel(texXInt, texYInt);
+            
+            // Пропускаем полностью прозрачные пиксели
+            if (pixelColor.a == 0) continue;
+            
+            // Применяем затемнение
+            pixelColor.r = static_cast<sf::Uint8>(static_cast<float>(pixelColor.r) * brightness);
+            pixelColor.g = static_cast<sf::Uint8>(static_cast<float>(pixelColor.g) * brightness);
+            pixelColor.b = static_cast<sf::Uint8>(static_cast<float>(pixelColor.b) * brightness);
+            
+            // Рисуем пиксель
+            sf::Vertex pixel(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)), pixelColor);
+            renderTexture_.draw(&pixel, 1, sf::Points);
+        }
+    }
 }

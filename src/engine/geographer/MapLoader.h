@@ -1,3 +1,4 @@
+// MapLoader.h
 #pragma once
 #include <vector>
 #include <string>
@@ -19,11 +20,13 @@ public:
     // Генерация уникального имени уровня
     static std::string generateLevelName();
 
+    static bool parseFurnitureLine(const std::string& line, LevelData& level);
+
 private:
     // Вспомогательные методы для парсинга
     static bool parseResourceLine(const std::string& line, LevelData& level);
     static bool parsePlayerPosition(const std::string& line, LevelData& level);
     static bool parseLevelInfo(const std::string& line, LevelData& level);
     static bool parseGridLine(const std::string& line, std::vector<std::vector<int>>& grid);
-    static bool parseTextureLine(const std::string& line, LevelData& level, const std::string& type); // ДОБАВЛЕН
+    static bool parseTextureLine(const std::string& line, LevelData& level, const std::string& type);
 };

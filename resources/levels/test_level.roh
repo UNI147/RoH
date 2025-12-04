@@ -2,7 +2,7 @@
 # Формат: [SECTION] затем параметры
 
 [LEVEL]
-name "Test Dungeon"
+name "Abandoned"
 background_music resources/sounds/music/Adrian'sAsleep.mid
 ambience_sound sounds/effects/ambienceloop.wav
 
@@ -25,6 +25,19 @@ ambience_sound sounds/effects/ambienceloop.wav
 
 [PLAYER]
 player 1.5 1.5 -1.0 0.0
+
+[FURNITURE_TYPES]
+# Загружаем типы мебели
+box furniture/box.fur
+candle furniture/candle.fur
+
+[FURNITURE_OBJECTS]
+# Добавляем объекты на уровень
+# Формат: type_name x y [rotation] [scale]
+box 8.5 8.5 0 1.0
+box 14.5 13.5 0 1.0
+candle 1.5 2.5 0 1.0
+candle 11.5 4.5 0 1.0
 
 [WALL_LAYER]
 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1

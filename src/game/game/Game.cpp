@@ -1,6 +1,7 @@
 #include "Game.h"
 #include <iostream>
 #include "resource_manager/FontNames.h"
+#include "engine/geographer/FurnitureLoader.h"
 
 Game::Game(sf::RenderWindow& window) 
     : window_(window) {
@@ -48,16 +49,16 @@ void Game::setupRendererTextures() {
         
         if (rm.hasTexture(texName)) {
             renderer_->addWallTexture(texId, texName);
-            std::cout << "  ✓ Texture loaded" << std::endl;
+            std::cout << "Texture loaded" << std::endl;
         } else {
-            std::cout << "  ✗ Texture not found in ResourceManager" << std::endl;
+            std::cout << "Texture not found in ResourceManager" << std::endl;
             
             // Попробуем загрузить напрямую
             auto it = currentLevel_.texturePaths.find(texName);
             if (it != currentLevel_.texturePaths.end()) {
                 if (rm.loadTexture(texName, it->second)) {
                     renderer_->addWallTexture(texId, texName);
-                    std::cout << "  ✓ Texture loaded directly" << std::endl;
+                    std::cout << "Texture loaded directly" << std::endl;
                 }
             }
         }
@@ -69,15 +70,15 @@ void Game::setupRendererTextures() {
         
         if (rm.hasTexture(texName)) {
             renderer_->addFloorTexture(texId, texName);
-            std::cout << "  ✓ Texture loaded" << std::endl;
+            std::cout << "Texture loaded" << std::endl;
         } else {
-            std::cout << "  ✗ Texture not found in ResourceManager" << std::endl;
+            std::cout << "Texture not found in ResourceManager" << std::endl;
             
             auto it = currentLevel_.texturePaths.find(texName);
             if (it != currentLevel_.texturePaths.end()) {
                 if (rm.loadTexture(texName, it->second)) {
                     renderer_->addFloorTexture(texId, texName);
-                    std::cout << "  ✓ Texture loaded directly" << std::endl;
+                    std::cout << "Texture loaded directly" << std::endl;
                 }
             }
         }
@@ -89,15 +90,15 @@ void Game::setupRendererTextures() {
         
         if (rm.hasTexture(texName)) {
             renderer_->addCeilingTexture(texId, texName);
-            std::cout << "  ✓ Texture loaded" << std::endl;
+            std::cout << "Texture loaded" << std::endl;
         } else {
-            std::cout << "  ✗ Texture not found in ResourceManager" << std::endl;
+            std::cout << "Texture not found in ResourceManager" << std::endl;
             
             auto it = currentLevel_.texturePaths.find(texName);
             if (it != currentLevel_.texturePaths.end()) {
                 if (rm.loadTexture(texName, it->second)) {
                     renderer_->addCeilingTexture(texId, texName);
-                    std::cout << "  ✓ Texture loaded directly" << std::endl;
+                    std::cout << "Texture loaded directly" << std::endl;
                 }
             }
         }
@@ -110,9 +111,40 @@ void Game::setupRendererTextures() {
     } else {
         renderer_->setUseTextures(true);
         std::cout << "Textured rendering enabled with " 
-                  << renderer_->getWallTextureCount() << " wall textures, "
-                  << renderer_->getFloorTextureCount() << " floor textures, "
-                  << renderer_->getCeilingTextureCount() << " ceiling textures" << std::endl;
+                << renderer_->getWallTextureCount() << " wall textures, "
+                << renderer_->getFloorTextureCount() << " floor textures, "
+                << renderer_->getCeilingTextureCount() << " ceiling textures" << std::endl;
+    }
+
+    std::cout << "=== Loading furniture textures ===" << std::endl;
+    std::cout << "Found " << currentLevel_.furnitureTypes.size() << " furniture types" << std::endl;
+    std::cout << "Found " << currentLevel_.furnitureObjects.size() << " furniture objects" << std::endl;
+    
+    // Загружаем текстуры для каждого типа мебели
+    for (const auto& [furnitureName, furnitureData] : currentLevel_.furnitureTypes) {
+        std::cout << "Processing furniture: " << furnitureName << std::endl;
+        std::cout << "  Texture name: " << furnitureData.textureName << std::endl;
+        
+        // Загружаем текстуру мебели в ResourceManager
+        std::string textureKey = "furniture_" + furnitureName;
+        
+        if (!rm.hasTexture(textureKey)) {
+            // Пытаемся найти файл текстуры
+            std::string foundPath = rm.findResourceFile(furnitureData.textureName);
+            if (!foundPath.empty()) {
+                if (rm.loadTexture(textureKey, foundPath)) {
+                    std::cout << "  Loaded furniture texture: " << textureKey << std::endl;
+                    renderer_->addFurnitureTexture(furnitureName, textureKey);
+                } else {
+                    std::cout << "  FAILED to load furniture texture: " << furnitureData.textureName << std::endl;
+                }
+            } else {
+                std::cout << "  Texture file not found: " << furnitureData.textureName << std::endl;
+            }
+        } else {
+            std::cout << "  Furniture texture already loaded: " << textureKey << std::endl;
+            renderer_->addFurnitureTexture(furnitureName, textureKey);
+        }
     }
 }
 
@@ -359,15 +391,24 @@ void Game::render() {
     window_.clear();
     
     if (!gameReady_) {
-        // Показываем экран загрузки
         renderLoadingScreen();
     } else {
-        // Основной рендеринг игры с тремя текстурными слоями
+        // Основной рендеринг игры
         renderer_->renderFrame(player_, 
                                currentLevel_.wallGrid,
                                currentLevel_.floorGrid,
                                currentLevel_.ceilingGrid,
                                rayCaster_);
+        
+        // === РЕНДЕРИМ МЕБЕЛЬ ПОСЛЕ СТЕН ===
+        if (renderer_->hasTextures() && !currentLevel_.furnitureObjects.empty()) {
+            renderer_->renderFurniture(player_,
+                                       currentLevel_.furnitureObjects,
+                                       currentLevel_.furnitureTypes,
+                                       rayCaster_);
+        }
+        
+        renderer_->display();
     }
     
     window_.display();

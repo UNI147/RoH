@@ -2,6 +2,9 @@
 #include <SFML/Graphics.hpp>
 #include <unordered_map>
 #include "../raycasting/RayCaster.h"
+#include "../geographer/Furniture.h"
+#include <iostream>
+#include "resource_manager/ResourceManager.h"
 
 class Renderer {
 public:
@@ -40,6 +43,17 @@ public:
     void setFloorTexture(const std::string& textureName);
     void setCeilingTexture(const std::string& textureName);
     void addWallTexture(const std::string& textureName);
+
+    // Рендеринг мебели
+    void renderFurniture(const PlayerState& player,
+                        const std::vector<FurnitureObject>& furniture,
+                        const std::unordered_map<std::string, FurnitureData>& furnitureTypes,
+                        RayCaster& rayCaster);
+    
+    // Добавление текстур мебели
+    void addFurnitureTexture(const std::string& furnitureName, const std::string& textureName);
+
+    void display();
 
 private:
     sf::RenderWindow& window_;
@@ -82,4 +96,18 @@ private:
     std::string floorTextureName_;
     std::string ceilingTextureName_;
     std::vector<std::string> wallTextureNames_;
+    
+    // Текстуры мебели
+    std::unordered_map<std::string, sf::Image> furnitureTextureImages_;
+    
+    // Вспомогательные методы
+    void drawFurnitureSprite(const FurnitureObject& obj, 
+                           const FurnitureData& data,
+                           const PlayerState& player,
+                           float distance,
+                           float angleToPlayer);
+                           
+    void renderFurnitureInternal(const PlayerState& player,
+                                const std::vector<FurnitureObject>& furniture,
+                                const std::unordered_map<std::string, FurnitureData>& furnitureTypes);
 };

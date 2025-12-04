@@ -7,11 +7,6 @@
 
 namespace fs = std::filesystem;
 
-ResourceManager& ResourceManager::getInstance() {
-    static ResourceManager instance;
-    return instance;
-}
-
 // Метод для поиска файла по альтернативным путям
 std::string ResourceManager::findResourceFile(const std::string& filename) const {
     FILE* testFile = nullptr;

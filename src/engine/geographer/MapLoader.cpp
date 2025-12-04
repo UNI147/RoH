@@ -5,8 +5,96 @@
 #include <filesystem>
 #include <algorithm>
 #include <ctime>
+#include "../geographer/Furniture.h"
+#include "../geographer/FurnitureLoader.h"
 
 namespace fs = std::filesystem;
+
+static bool parseFurnitureTypeLine(const std::string& line, LevelData& level) {
+    std::istringstream iss(line);
+    std::string furnitureName;
+    std::string furnitureFile;
+    
+    if (iss >> furnitureName >> furnitureFile) {
+        // Загружаем данные мебели из .fur файла
+        auto furData = FurnitureLoader::loadFurnitureFromFile(furnitureFile);
+        if (furData) {
+            level.furnitureTypes[furnitureName] = *furData;
+            
+            // Отладочный вывод
+            std::cout << "Loaded furniture type: " << furnitureName 
+                      << " from " << furnitureFile 
+                      << " (texture: " << furData->textureName << ")" << std::endl;
+            return true;
+        } else {
+            std::cerr << "Failed to load furniture type: " << furnitureName 
+                      << " from " << furnitureFile << std::endl;
+        }
+    }
+    return false;
+}
+
+static bool parseFurnitureObjectLine(const std::string& line, LevelData& level) {
+    std::istringstream iss(line);
+    std::string type;
+    float x, y, rotation = 0.0f, scale = 1.0f;
+    
+    if (iss >> type >> x >> y) {
+        FurnitureObject obj;
+        obj.furnitureType = type;
+        obj.position = sf::Vector2f(x, y);
+        
+        // Опциональные параметры
+        iss >> rotation;
+        if (!iss.fail()) obj.rotation = rotation;
+        
+        iss >> scale;
+        if (!iss.fail()) obj.scale = scale;
+        
+        level.furnitureObjects.push_back(obj);
+        return true;
+    }
+    return false;
+}
+
+bool MapLoader::parseFurnitureLine(const std::string& line, LevelData& level) {
+    std::istringstream iss(line);
+    std::string type;
+    std::string furnitureName;
+    float x, y, rotation = 0.0f, scale = 1.0f;
+    
+    // Формат: furniture_type x y [rotation] [scale]
+    if (iss >> type >> furnitureName >> x >> y) {
+        FurnitureObject obj;
+        obj.furnitureType = furnitureName;
+        obj.position = sf::Vector2f(x, y);
+        
+        // Опциональные параметры
+        iss >> rotation;
+        if (!iss.fail()) obj.rotation = rotation;
+        
+        iss >> scale;
+        if (!iss.fail()) obj.scale = scale;
+        
+        // Опциональный цвет
+        float r, g, b, a = 255.0f;
+        if (iss >> r >> g >> b) {
+            iss >> a;
+            if (iss.fail()) a = 255.0f;
+            obj.tint = sf::Color(
+                static_cast<sf::Uint8>(r),
+                static_cast<sf::Uint8>(g),
+                static_cast<sf::Uint8>(b),
+                static_cast<sf::Uint8>(a)
+            );
+        }
+        
+        level.furnitureObjects.push_back(obj);
+        return true;
+    }
+    
+    return false;
+}
 
 std::unique_ptr<LevelData> MapLoader::loadLevelFromFile(const std::string& filename) {
     auto levelData = std::make_unique<LevelData>();
@@ -55,17 +143,30 @@ std::unique_ptr<LevelData> MapLoader::loadLevelFromFile(const std::string& filen
         // Парсим строку в зависимости от текущей секции
         if (currentSection == "[LEVEL]") {
             parseLevelInfo(line, *levelData);
-        } else if (currentSection == "[WALL_TEXTURES]") {
+        } 
+        else if (currentSection == "[WALL_TEXTURES]") {
             parseTextureLine(line, *levelData, "wall");
-        } else if (currentSection == "[FLOOR_TEXTURES]") {
+        } 
+        else if (currentSection == "[FLOOR_TEXTURES]") {
             parseTextureLine(line, *levelData, "floor");
-        } else if (currentSection == "[CEILING_TEXTURES]") {
+        } 
+        else if (currentSection == "[CEILING_TEXTURES]") {
             parseTextureLine(line, *levelData, "ceiling");
-        } else if (currentSection == "[PLAYER]") {
+        } 
+        else if (currentSection == "[PLAYER]") {
             parsePlayerPosition(line, *levelData);
-        } else if (currentSection == "[WALL_LAYER]" || 
-                   currentSection == "[FLOOR_LAYER]" || 
-                   currentSection == "[CEILING_LAYER]") {
+        } 
+        else if (currentSection == "[FURNITURE_TYPES]") {
+            parseFurnitureTypeLine(line, *levelData);
+        } 
+        else if (currentSection == "[FURNITURE_OBJECTS]") {
+            if (!parseFurnitureObjectLine(line, *levelData)) {
+                std::cerr << "Failed to parse furniture object line: " << line << std::endl;
+            }
+        }
+        else if (currentSection == "[WALL_LAYER]" || 
+                 currentSection == "[FLOOR_LAYER]" || 
+                 currentSection == "[CEILING_LAYER]") {
             parseGridLine(line, currentGrid);
         }
     }
