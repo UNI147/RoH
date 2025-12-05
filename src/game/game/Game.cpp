@@ -396,6 +396,14 @@ void Game::render() {
     if (!gameReady_) {
         renderLoadingScreen();
     } else {
+        // Собираем источники света из мебели
+        if (renderer_) {
+            renderer_->collectLightSourcesForScene(
+                currentLevel_.furnitureObjects,
+                currentLevel_.furnitureTypes
+            );
+        }
+        
         // Основной рендеринг игры
         renderer_->renderFrame(player_, 
                                currentLevel_.wallGrid,

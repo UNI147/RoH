@@ -27,6 +27,27 @@ ambience_sound sounds/effects/ambienceloop.wav
 [PLAYER]
 player 8.5 8.5 -1.0 0.0
 
+[FURNITURE_TYPES]
+# Загружаем типы мебели
+pileofremains furniture/pileofremains.fur
+candle furniture/candle.fur
+chandelier furniture/chandelier.fur
+
+[FURNITURE_OBJECTS]
+# Добавляем объекты на уровень
+# Формат: type_name x y [rotation] [scale]
+pileofremains 3.5 3.5 0 1.0
+pileofremains 11.5 4.5 0 1.0
+pileofremains 3.5 12.5 0 1.0
+pileofremains 12.5 11.5 0 1.0
+candle 8.500 8.860 0 1.0
+candle 8.035 8.811 0 1.0
+candle 7.875 8.174 0 1.0
+candle 8.475 7.859 0 1.0
+candle 8.820 8.429 0 1.0
+chandelier 12.5 5.5 0 1.0
+chandelier 3.5 10.5 0 1.0
+
 [WALL_LAYER]
 1 1 1 3 1 1 4 1 1 3 1 1 4 1 1 1
 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1

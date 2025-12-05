@@ -16,6 +16,14 @@ public:
     Game(sf::RenderWindow& window);
     void update();
     void render();
+    void collectLightSources() {
+        if (renderer_) {
+            renderer_->collectLightSourcesForScene(
+                currentLevel_.furnitureObjects,
+                currentLevel_.furnitureTypes
+            );
+        }
+    }
 
 private:
     sf::RenderWindow& window_;

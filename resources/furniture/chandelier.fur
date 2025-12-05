@@ -1,0 +1,10 @@
+# furniture/chandelier.fur
+texture textures/furniture/chandelier.png
+width 1.0
+height 1.0
+passable true
+transparent false
+y_offset 0.0
+pivot 0.5 1.0
+collision_box 0.25 0.25 0.5 0.5
+light_radius 3.5

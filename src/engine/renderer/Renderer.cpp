@@ -42,7 +42,6 @@ void Renderer::renderFrame(const PlayerState& player,
                           const std::vector<std::vector<int>>& ceilingMap,
                           RayCaster& rayCaster) {
     
-    // Сохраняем текущую карту стен для Z-буфера мебели
     currentWallMap_ = &wallMap;
     
     updateRenderSpriteScale();
@@ -94,6 +93,32 @@ void Renderer::display() {
     window_.draw(renderSprite_);
 }
 
+float Renderer::calculateLightAtPoint(const sf::Vector2f& point, 
+                                    const std::vector<std::vector<int>>& wallMap) const {
+    float totalLight = 0.0f;
+    
+    for (const auto& light : lightSources_) {
+        float dx = point.x - light.position.x;
+        float dy = point.y - light.position.y;
+        float lightDist = std::sqrt(dx*dx + dy*dy);
+        
+        if (lightDist < light.radius) {
+            // Упрощенная проверка видимости - используем саму точку
+            if (isLightVisible(light.position, point, wallMap)) {
+                // Квадратичное затухание
+                float lightIntensity = 1.0f - (lightDist / light.radius);
+                lightIntensity = lightIntensity * lightIntensity;
+                lightIntensity *= light.intensity;
+                
+                // ДЛЯ ПОЛА И ПОТОЛКА - ВСЕГДА ПОЛНАЯ ЯРКОСТЬ (угол не учитываем)
+                totalLight += lightIntensity;
+            }
+        }
+    }
+    
+    return std::min(2.0f, totalLight);
+}
+
 void Renderer::drawTexturedWallStrip(int x, int drawStart, int drawEnd, 
                                     const RayHit& hit, int lineHeight) {
     if (lineHeight <= 0) return;
@@ -116,7 +141,8 @@ void Renderer::drawTexturedWallStrip(int x, int drawStart, int drawEnd,
     
     // Вычисление координаты текстуры по X
     int texWidth = static_cast<int>(textureImage->getSize().x);
-    int texX = static_cast<int>(hit.wallX * static_cast<float>(texWidth));
+    float texCoordX = hit.wallX * static_cast<float>(texWidth);
+    int texX = static_cast<int>(texCoordX);
     
     // Корректировка для предотвращения зеркального отображения
     if ((hit.side == 0 && hit.rayDirX > 0) || (hit.side == 1 && hit.rayDirY < 0)) {
@@ -132,101 +158,114 @@ void Renderer::drawTexturedWallStrip(int x, int drawStart, int drawEnd,
     // Расчет позиции текстуры с учетом высоты обзора
     float texPos = (static_cast<float>(drawStart) - static_cast<float>(RENDER_HEIGHT) * viewHeight_ + static_cast<float>(lineHeight) / 2.0f) * step;
     
-    // Расстояние затемнение - уменьшаем максимальное расстояние для более сильного затемнения
-    float distanceBrightness = 1.0f - std::min(1.0f, hit.distance / maxDarkDistance_);
-    distanceBrightness = std::max(0.0f, distanceBrightness);
+    // Мягкое затемнение по расстоянию
+    float distanceFactor = std::min(1.0f, hit.distance / maxDarkDistance_);
+    float distanceBrightness = 1.0f - (distanceFactor * distanceFactor);
     
     // Дополнительное затемнение для Y-сторон
     float sideDarkness = 1.0f;
     if (hit.side == 1) {
-        sideDarkness = 0.7f;
+        sideDarkness = 0.8f;
     }
     
     // Базовое затемнение
     float baseBrightness = distanceBrightness * sideDarkness;
     
-    // Используем currentWallMap_ для проверки препятствий
-    const std::vector<std::vector<int>>* wallMapPtr = currentWallMap_;
-    
-    for (int y = drawStart; y < drawEnd; ++y) {
-        int texY = static_cast<int>(texPos) % textureImage->getSize().y;
-        texY = std::max(0, std::min(texY, static_cast<int>(textureImage->getSize().y) - 1));
+    // Расчет освещения для стен
+    float lightBrightness = 0.0f;
+    if (!lightSources_.empty() && currentWallMap_) {
         
-        sf::Color pixelColor = textureImage->getPixel(texX, texY);
+        // Используем точку на стене для проверки освещения
+        float wallX, wallY;
         
-        // Изначальная яркость - только расстояние и сторона
-        float brightness = baseBrightness;
+        if (hit.side == 0) {
+            wallX = hit.mapX + (hit.rayDirX > 0 ? 0.0f : 1.0f);
+            wallY = hit.mapY + hit.wallX;
+        } else { // Горизонтальная стена
+            wallX = hit.mapX + hit.wallX;
+            wallY = hit.mapY + (hit.rayDirY > 0 ? 0.0f : 1.0f);
+        }
         
-        // Добавляем освещение от источников света (с проверкой препятствий)
-        if (!lightSources_.empty() && wallMapPtr) {
-            // Позиция стены в мире
-            float wallWorldX = hit.mapX + 0.5f; // Используем центр клетки для проверки
-            float wallWorldY = hit.mapY + 0.5f;
+        // Для стен проверяем несколько точек по высоте
+        const int samplePoints = 3;
+        float totalLight = 0.0f;
+        
+        // ИСПРАВЛЕННЫЙ ЦИКЛ: были серьезные синтаксические ошибки
+        for (int i = 0; i < samplePoints; ++i) {
+            float offset = (i - samplePoints/2) * 0.1f;
             
-            // Для Y-сторон корректируем позицию
-            if (hit.side == 1) {
-                if (hit.rayDirY > 0) wallWorldY -= 0.5f;
-                else wallWorldY += 0.5f;
+            float sampleX = wallX;
+            float sampleY = wallY;
+            
+            // Смещаем точку вдоль стены
+            if (hit.side == 0) {
+                sampleY += offset;
             } else {
-                if (hit.rayDirX > 0) wallWorldX -= 0.5f;
-                else wallWorldX += 0.5f;
+                sampleX += offset;
             }
             
+            // НЕМНОГО СДВИГАЕМ ОТ СТЕНЫ, ЧТОБЫ НЕ УПИРАТЬСЯ В НЕЕ
+            if (hit.side == 0) {
+                sampleX += (hit.rayDirX > 0 ? -0.05f : 0.05f);
+            } else {
+                sampleY += (hit.rayDirY > 0 ? -0.05f : 0.05f);
+            }
+            
+            // Используем упрощенный метод для стен
+            float pointLight = calculateLightAtPoint(sf::Vector2f(sampleX, sampleY), *currentWallMap_);
+            
+            // Для стен учитываем угол падения
             for (const auto& light : lightSources_) {
-                // Проверяем расстояние до центра клетки
-                float dx = wallWorldX - light.position.x;
-                float dy = wallWorldY - light.position.y;
-                float lightDistSq = dx*dx + dy*dy;
+                float ldx = sampleX - light.position.x;
+                float ldy = sampleY - light.position.y;
+                float ldist = std::sqrt(ldx*ldx + ldy*ldy);
                 
-                if (lightDistSq < light.radius * light.radius) {
-                    float lightDist = std::sqrt(lightDistSq);
-                    
-                    // Проверяем несколько точек на стене
-                    bool lightVisible = false;
-                    
-                    // Основная проверка (быстрая) - от центра клетки
-                    if (isLightVisible(light.position, 
-                                    sf::Vector2f(wallWorldX, wallWorldY), 
-                                    *wallMapPtr)) {
-                        lightVisible = true;
-                    } else {
-                        // Если свет не виден из центра, проверяем ближайший угол
-                        float closestCornerX = (light.position.x < wallWorldX) ? 
-                            wallWorldX - 0.4f : wallWorldX + 0.4f;
-                        float closestCornerY = (light.position.y < wallWorldY) ? 
-                            wallWorldY - 0.4f : wallWorldY + 0.4f;
+                if (ldist < light.radius && isLightVisible(light.position, sf::Vector2f(sampleX, sampleY), *currentWallMap_)) {
+                    if (ldist > 0.1f) {
+                        float nx = ldx / ldist;
+                        float ny = ldy / ldist;
                         
-                        if (isLightVisible(light.position,
-                                        sf::Vector2f(closestCornerX, closestCornerY),
-                                        *wallMapPtr)) {
-                            lightVisible = true;
-                        }
-                    }
-                    
-                    if (lightVisible) {
-                        // Квадратичное затухание для более реалистичного света
-                        float lightIntensity = 1.0f - (lightDist / light.radius);
-                        lightIntensity = lightIntensity * lightIntensity;
-                        lightIntensity *= light.intensity;
-                        
-                        // Для угловых стен уменьшаем интенсивность
-                        if (!isPointInSameCell(wallWorldX, wallWorldY, 
-                                            hit.mapX, hit.mapY)) {
-                            lightIntensity *= 0.7f;
+                        // Учет угла для стен
+                        float angleFactor;
+                        if (hit.side == 0) {
+                            // Вертикальная стена - нормаль по X
+                            float dot = std::abs(nx);
+                            angleFactor = 0.7f + 0.3f * dot;
+                        } else {
+                            // Горизонтальная стена - нормаль по Y
+                            float dot = std::abs(ny);
+                            angleFactor = 0.7f + 0.3f * dot;
                         }
                         
-                        // Ограничиваем максимальную яркость от источников света
-                        lightIntensity = std::min(1.5f, lightIntensity);
+                        // Применяем угол к интенсивности
+                        float intensity = 1.0f - (ldist / light.radius);
+                        intensity = intensity * intensity;
+                        intensity *= angleFactor;
+                        intensity *= light.intensity;
                         
-                        // Учитываем угол падения света (для реалистичности)
-                        brightness = std::max(brightness, lightIntensity);
+                        pointLight = std::max(pointLight, intensity);
                     }
                 }
             }
+            
+            totalLight += pointLight;
         }
         
-        // Ограничиваем итоговую яркость - разрешаем полную темноту (0.0f)
-        brightness = std::max(0.0f, std::min(2.0f, brightness));
+        lightBrightness = totalLight / static_cast<float>(samplePoints);
+        lightBrightness *= wallLightFactor_;
+    }
+
+    // ИТОГОВАЯ ЯРКОСТЬ
+    float brightness = baseBrightness * 0.5f + lightBrightness * 1.5f;
+    brightness = std::max(0.0f, std::min(3.0f, brightness));
+    
+    for (int y = drawStart; y < drawEnd; ++y) {
+        int texY = static_cast<int>(texPos);
+        if (texY >= textureImage->getSize().y) texY = textureImage->getSize().y - 1;
+        if (texY < 0) texY = 0;
+        texY = std::max(0, std::min(texY, static_cast<int>(textureImage->getSize().y) - 1));
+        
+        sf::Color pixelColor = textureImage->getPixel(texX, texY);
         
         // Применяем яркость к цвету с защитой от переполнения
         float r = static_cast<float>(pixelColor.r) * brightness;
@@ -316,32 +355,15 @@ void Renderer::drawTexturedFloorAndCeiling(const PlayerState& player,
                     float floorBrightness = 1.0f - std::min(1.0f, rowDistance / maxDarkDistance_);
                     floorBrightness = std::max(0.0f, floorBrightness);
                     
-                    // ОСВЕЩЕНИЕ ДЛЯ ПОЛА С ПРОВЕРКОЙ ПРЕПЯТСТВИЙ
+                    // ОСВЕЩЕНИЕ ДЛЯ ПОЛА
                     float floorLightBrightness = 0.0f;
                     if (!lightSources_.empty() && wallMapPtr) {
-                        float floorWorldX = floorX;
-                        float floorWorldY = floorY;
-                        
-                        for (const auto& light : lightSources_) {
-                            float lightDist = std::sqrt(
-                                (floorWorldX - light.position.x) * (floorWorldX - light.position.x) +
-                                (floorWorldY - light.position.y) * (floorWorldY - light.position.y)
-                            );
-                            
-                            if (lightDist < light.radius) {
-                                // ПРОВЕРЯЕМ, НЕ БЛОКИРОВАН ЛИ СВЕТ
-                                if (isLightVisible(light.position, 
-                                                   sf::Vector2f(floorWorldX, floorWorldY), 
-                                                   *wallMapPtr)) {
-                                    
-                                    // Квадратичное затухание
-                                    float lightIntensity = 1.0f - (lightDist / light.radius);
-                                    lightIntensity = lightIntensity * lightIntensity;
-                                    lightIntensity *= light.intensity;
-                                    floorLightBrightness = std::max(floorLightBrightness, lightIntensity);
-                                }
-                            }
-                        }
+                        // Используем универсальный метод с текущими координатами floorX и floorY
+                        floorLightBrightness = calculateLightAtPoint(
+                            sf::Vector2f(floorX, floorY), 
+                            *wallMapPtr
+                        );
+                        floorLightBrightness *= floorLightFactor_;
                     }
                     
                     // Итоговая яркость пола - СУММИРУЕМ затемнение и освещение
@@ -431,29 +453,12 @@ void Renderer::drawTexturedFloorAndCeiling(const PlayerState& player,
                     // ОСВЕЩЕНИЕ ДЛЯ ПОТОЛКА С ПРОВЕРКОЙ ПРЕПЯТСТВИЙ
                     float ceilingLightBrightness = 0.0f;
                     if (!lightSources_.empty() && wallMapPtr) {
-                        float ceilingWorldX = ceilingX;
-                        float ceilingWorldY = ceilingY;
-                        
-                        for (const auto& light : lightSources_) {
-                            float lightDist = std::sqrt(
-                                (ceilingWorldX - light.position.x) * (ceilingWorldX - light.position.x) +
-                                (ceilingWorldY - light.position.y) * (ceilingWorldY - light.position.y)
-                            );
-                            
-                            if (lightDist < light.radius) {
-                                // ПРОВЕРЯЕМ, НЕ БЛОКИРОВАН ЛИ СВЕТ
-                                if (isLightVisible(light.position, 
-                                                   sf::Vector2f(ceilingWorldX, ceilingWorldY), 
-                                                   *wallMapPtr)) {
-                                    
-                                    // Квадратичное затухание
-                                    float lightIntensity = 1.0f - (lightDist / light.radius);
-                                    lightIntensity = lightIntensity * lightIntensity;
-                                    lightIntensity *= light.intensity;
-                                    ceilingLightBrightness = std::max(ceilingLightBrightness, lightIntensity);
-                                }
-                            }
-                        }
+                        // Используем универсальный метод с текущими координатами ceilingX и ceilingY
+                        ceilingLightBrightness = calculateLightAtPoint(
+                            sf::Vector2f(ceilingX, ceilingY), 
+                            *wallMapPtr
+                        );
+                        ceilingLightBrightness *= ceilingLightFactor_;
                     }
                     
                     // Итоговая яркость потолка
@@ -661,7 +666,7 @@ void Renderer::renderFurniture(const PlayerState& player,
         depthBuffer[x] = hit.distance;
     }
     
-    // Теперь рендерим мебель с учетом буфера глубины
+    // Теперь рендерим мебель с учетом буфера глубина
     renderFurnitureWithDepth(player, furniture, furnitureTypes, depthBuffer);
 }
 
@@ -795,7 +800,7 @@ void Renderer::drawFurnitureSpriteWithDepth(const FurnitureObject& obj,
     int drawEndY = drawStartY + spriteHeight;
     
     // Применяем вертикальное смещение (yOffset)
-    int yOffset = static_cast<int>(data.yOffset * spriteHeight);
+    int yOffset = static_cast<int>(data.yOffset * static_cast<float>(spriteHeight));
     drawStartY += yOffset;
     drawEndY += yOffset;
     
@@ -828,28 +833,10 @@ void Renderer::drawFurnitureSpriteWithDepth(const FurnitureObject& obj,
     
     // 9а. Расчет освещения от источников света С ПРОВЕРКОЙ ПРЕПЯТСТВИЙ
     float lightBrightness = 0.0f;
-    for (const auto& light : lightSources_) {
-        // Расстояние от объекта до источника света
-        float lightDist = std::sqrt(
-            (obj.position.x - light.position.x) * (obj.position.x - light.position.x) +
-            (obj.position.y - light.position.y) * (obj.position.y - light.position.y)
-        );
-        
-        if (lightDist < light.radius) {
-            // ПРОВЕРЯЕМ, НЕ БЛОКИРОВАН ЛИ СВЕТ СТЕНОЙ
-            bool lightVisible = true;
-            if (wallMapPtr) {
-                lightVisible = isLightVisible(light.position, obj.position, *wallMapPtr);
-            }
-            
-            if (lightVisible) {
-                // Квадратичное затухание
-                float lightIntensity = 1.0f - (lightDist / light.radius);
-                lightIntensity = lightIntensity * lightIntensity;
-                lightIntensity *= light.intensity;
-                lightBrightness = std::max(lightBrightness, lightIntensity);
-            }
-        }
+    if (!lightSources_.empty() && wallMapPtr) {
+        // Используем универсальный метод
+        lightBrightness = calculateLightAtPoint(obj.position, *wallMapPtr);
+        lightBrightness *= furnitureLightFactor_;
     }
     
     // 9б. Итоговая яркость: затемнение + освещение
@@ -880,7 +867,7 @@ void Renderer::drawFurnitureSpriteWithDepth(const FurnitureObject& obj,
             
             float texX = texXOffset + (x - clipStartX) * stepX;
             
-            int texXInt, texYInt;
+            int texXInt = 0, texYInt = 0;
             
             // Применяем вращение если нужно
             if (useRotation) {
@@ -893,14 +880,21 @@ void Renderer::drawFurnitureSpriteWithDepth(const FurnitureObject& obj,
                 // Проверяем границы после вращения
                 if (rotatedX >= 0 && rotatedX < texWidth &&
                     rotatedY >= 0 && rotatedY < texHeight) {
-                    texXInt = static_cast<int>(rotatedX);
-                    texYInt = static_cast<int>(rotatedY);
+                    texXInt = static_cast<int>(std::round(rotatedX));
+                    texYInt = static_cast<int>(std::round(rotatedY));
                 } else {
                     continue;
                 }
             } else {
-                texXInt = static_cast<int>(texX);
-                texYInt = static_cast<int>(texY);
+                // Прямое преобразование
+                texXInt = static_cast<int>(std::round(texX));
+                texYInt = static_cast<int>(std::round(texY));
+            }
+            
+            // Проверяем границы текстуры
+            if (texXInt < 0 || texXInt >= texWidth || 
+                texYInt < 0 || texYInt >= texHeight) {
+                continue;
             }
             
             sf::Color pixelColor = textureImage.getPixel(texXInt, texYInt);
@@ -932,12 +926,11 @@ void Renderer::drawFurnitureSpriteWithDepth(const FurnitureObject& obj,
     }
 }
 
-bool Renderer::isLightVisible(const sf::Vector2f& lightPos, const sf::Vector2f& targetPos,
+bool Renderer::isLightVisible(const sf::Vector2f& lightPos, 
+                             const sf::Vector2f& targetPos,
                              const std::vector<std::vector<int>>& wallMap) const {
-    // Проверка видимости света с учетом геометрии стен
-    
-    float dx = lightPos.x - targetPos.x;
-    float dy = lightPos.y - targetPos.y;
+    float dx = targetPos.x - lightPos.x;
+    float dy = targetPos.y - lightPos.y;
     float distance = std::sqrt(dx*dx + dy*dy);
     
     if (distance < 0.1f) return true;
@@ -946,37 +939,39 @@ bool Renderer::isLightVisible(const sf::Vector2f& lightPos, const sf::Vector2f& 
     float stepX = dx / distance;
     float stepY = dy / distance;
     
-    // Количество шагов зависит от расстояния, но с минимальным/максимальным значением
-    int maxSteps = static_cast<int>(distance * 10.0f);
-    maxSteps = std::max(5, std::min(50, maxSteps));
+    // Более грубый шаг для производительности
+    float stepSize = 0.1f;
+    int steps = static_cast<int>(distance / stepSize) + 1;
     
-    float currentX = targetPos.x;
-    float currentY = targetPos.y;
+    float currentX = lightPos.x;
+    float currentY = lightPos.y;
     
-    float startOffset = 0.15f;
-    currentX += stepX * startOffset;
-    currentY += stepY * startOffset;
-    
-    for (int i = 0; i < maxSteps; ++i) {
+    // Игнорируем начальную и конечную точки
+    for (int i = 1; i < steps; ++i) {
+        currentX += stepX * stepSize;
+        currentY += stepY * stepSize;
+        
+        // Если мы достигли или превысили целевую точку, выходим
+        if (i >= steps - 1) break;
+        
         int mapX = static_cast<int>(currentX);
         int mapY = static_cast<int>(currentY);
         
-        // Проверяем, не является ли клетка стеной
+        // Проверяем границы карты
         if (mapY >= 0 && mapY < static_cast<int>(wallMap.size()) &&
             mapX >= 0 && mapX < static_cast<int>(wallMap[0].size())) {
+            
+            // Если это стена, свет заблокирован
             if (wallMap[mapY][mapX] != 0) {
-                return false;
+                // Но проверяем, не находимся ли мы уже в целевой клетке
+                int targetMapX = static_cast<int>(targetPos.x);
+                int targetMapY = static_cast<int>(targetPos.y);
+                
+                // Если это не целевая клетка, свет заблокирован
+                if (!(mapX == targetMapX && mapY == targetMapY)) {
+                    return false;
+                }
             }
-        }
-        
-        // Переходим к следующей точке
-        currentX += stepX * 0.1f;
-        currentY += stepY * 0.1f;
-        
-        // Прерываем, если прошли всё расстояние
-        float traveled = (i + 1) * 0.1f + startOffset;
-        if (traveled >= distance) {
-            break;
         }
     }
     
@@ -987,6 +982,22 @@ bool Renderer::isPointInSameCell(float worldX, float worldY, int cellX, int cell
     // Проверяет, находится ли точка в той же клетке карты
     return static_cast<int>(worldX) == cellX && 
            static_cast<int>(worldY) == cellY;
+}
+
+void Renderer::collectLightSourcesForScene(const std::vector<FurnitureObject>& furniture,
+                                         const std::unordered_map<std::string, FurnitureData>& furnitureTypes) {
+    lightSources_.clear();
+    
+    for (const auto& obj : furniture) {
+        auto it = furnitureTypes.find(obj.furnitureType);
+        if (it != furnitureTypes.end() && it->second.lightRadius > 0.0f) {
+            LightSource light;
+            light.position = obj.position;
+            light.radius = it->second.lightRadius;
+            light.intensity = 1.0f;
+            lightSources_.push_back(light);
+        }
+    }
 }
 
 // Старый метод для совместимости (используется в других частях кода)

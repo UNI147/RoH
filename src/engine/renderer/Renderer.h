@@ -55,6 +55,27 @@ public:
     // Добавление текстур мебели
     void addFurnitureTexture(const std::string& furnitureName, const std::string& textureName);
 
+    // Установка коэффициентов освещения
+    void setLightBalance(float wallFactor, float floorFactor, float ceilingFactor) {
+        wallLightFactor_ = wallFactor;
+        floorLightFactor_ = floorFactor;
+        ceilingLightFactor_ = ceilingFactor;
+    }
+
+    void setLightFactors(float wallFactor, float floorFactor, float ceilingFactor, float furnitureFactor = 1.0f) {
+        wallLightFactor_ = wallFactor;
+        floorLightFactor_ = floorFactor;
+        ceilingLightFactor_ = ceilingFactor;
+        furnitureLightFactor_ = furnitureFactor;
+    }
+
+    // Управление максимальным расстоянием затемнения
+    void setMaxDarkDistance(float distance) { maxDarkDistance_ = distance; }
+    float getMaxDarkDistance() const { return maxDarkDistance_; }
+    
+    void collectLightSourcesForScene(const std::vector<FurnitureObject>& furniture,
+                                   const std::unordered_map<std::string, FurnitureData>& furnitureTypes);
+
     void display();
 
 private:
@@ -145,4 +166,12 @@ private:
                        const std::vector<std::vector<int>>& wallMap) const;
     
     bool isPointInSameCell(float worldX, float worldY, int cellX, int cellY) const;
+
+    float wallLightFactor_ = 0.75f;
+    float floorLightFactor_ = 0.75f;
+    float ceilingLightFactor_ = 0.75f;
+    float furnitureLightFactor_ = 0.75f;
+
+    float calculateLightAtPoint(const sf::Vector2f& point, 
+                            const std::vector<std::vector<int>>& wallMap) const;
 };
