@@ -69,12 +69,13 @@ void Renderer::renderFrame(const PlayerState& player,
         
         // Правильный расчет высоты стены с учетом высоты обзора
         int lineHeight = static_cast<int>(RENDER_HEIGHT / perpWallDist);
-        
-        // Расчет: viewHeight_ смещает точку обзора
+
         int horizonLine = static_cast<int>(RENDER_HEIGHT * viewHeight_);
         int drawStart = horizonLine - lineHeight / 2;
         int drawEnd = horizonLine + lineHeight / 2;
-        
+
+        if (drawEnd < RENDER_HEIGHT - 1) drawEnd += 1;
+
         if (drawStart < 0) drawStart = 0;
         if (drawEnd >= RENDER_HEIGHT) drawEnd = RENDER_HEIGHT - 1;
         
@@ -103,20 +104,22 @@ float Renderer::calculateLightAtPoint(const sf::Vector2f& point,
         float lightDist = std::sqrt(dx*dx + dy*dy);
         
         if (lightDist < light.radius) {
-            // Упрощенная проверка видимости - используем саму точку
             if (isLightVisible(light.position, point, wallMap)) {
                 // Квадратичное затухание
                 float lightIntensity = 1.0f - (lightDist / light.radius);
                 lightIntensity = lightIntensity * lightIntensity;
                 lightIntensity *= light.intensity;
                 
-                // ДЛЯ ПОЛА И ПОТОЛКА - ВСЕГДА ПОЛНАЯ ЯРКОСТЬ (угол не учитываем)
+                // ОГРАНИЧЕНИЕ МАКСИМАЛЬНОЙ ЯРКОСТИ ОТ КАЖДОГО ИСТОЧНИКА
+                lightIntensity = std::min(lightIntensity, 0.8f);
+                
                 totalLight += lightIntensity;
             }
         }
     }
     
-    return std::min(2.0f, totalLight);
+    // ОГРАНИЧИВАЕМ ОБЩУЮ ЯРКОСТЬ МАКСИМУМОМ 1.0
+    return std::min(1.0f, totalLight);
 }
 
 void Renderer::drawTexturedWallStrip(int x, int drawStart, int drawEnd, 
@@ -257,7 +260,7 @@ void Renderer::drawTexturedWallStrip(int x, int drawStart, int drawEnd,
 
     // ИТОГОВАЯ ЯРКОСТЬ
     float brightness = baseBrightness * 0.5f + lightBrightness * 1.5f;
-    brightness = std::max(0.0f, std::min(3.0f, brightness));
+    brightness = std::max(0.0f, std::min(1.5f, brightness));
     
     for (int y = drawStart; y < drawEnd; ++y) {
         int texY = static_cast<int>(texPos);
@@ -368,7 +371,7 @@ void Renderer::drawTexturedFloorAndCeiling(const PlayerState& player,
                     
                     // Итоговая яркость пола - СУММИРУЕМ затемнение и освещение
                     float finalFloorBrightness = floorBrightness + floorLightBrightness;
-                    finalFloorBrightness = std::max(0.0f, std::min(2.0f, finalFloorBrightness));
+                    finalFloorBrightness = std::max(0.0f, std::min(1.0f, finalFloorBrightness));
                     
                     // Цвет пола с защитой от переполнения
                     sf::Color floorColor = floorTexImage->getPixel(floorTexX, floorTexY);
@@ -463,7 +466,7 @@ void Renderer::drawTexturedFloorAndCeiling(const PlayerState& player,
                     
                     // Итоговая яркость потолка
                     float finalCeilingBrightness = ceilingBrightness + ceilingLightBrightness;
-                    finalCeilingBrightness = std::max(0.0f, std::min(2.0f, finalCeilingBrightness));
+                    finalCeilingBrightness = std::max(0.0f, std::min(1.0f, finalCeilingBrightness));
                     
                     sf::Color ceilingColor = ceilingTexImage->getPixel(ceilingTexX, ceilingTexY);
                     float r = static_cast<float>(ceilingColor.r) * finalCeilingBrightness;
@@ -534,6 +537,8 @@ void Renderer::drawWallStrip(int x, int drawStart, int drawEnd, int side, float 
     wallColor.r = static_cast<sf::Uint8>(static_cast<float>(wallColor.r) * brightness);
     wallColor.g = static_cast<sf::Uint8>(static_cast<float>(wallColor.g) * brightness);
     wallColor.b = static_cast<sf::Uint8>(static_cast<float>(wallColor.b) * brightness);
+    
+    if (drawEnd < RENDER_HEIGHT - 1) drawEnd += 1;
     
     sf::Vertex line[] = {
         sf::Vertex(sf::Vector2f(static_cast<float>(x), static_cast<float>(drawStart)), wallColor),

@@ -167,10 +167,10 @@ private:
     
     bool isPointInSameCell(float worldX, float worldY, int cellX, int cellY) const;
 
-    float wallLightFactor_ = 0.75f;
-    float floorLightFactor_ = 0.75f;
-    float ceilingLightFactor_ = 0.75f;
-    float furnitureLightFactor_ = 0.75f;
+    float wallLightFactor_ = 0.5f;
+    float floorLightFactor_ = 0.5f;
+    float ceilingLightFactor_ = 0.5f;
+    float furnitureLightFactor_ = 0.5f;
 
     float calculateLightAtPoint(const sf::Vector2f& point, 
                             const std::vector<std::vector<int>>& wallMap) const;
