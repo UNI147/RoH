@@ -1,0 +1,153 @@
+# RoH Level File создан в Cartographer
+# Размер: 16x16
+
+[LEVEL]
+name "Новый уровень"
+background_music resources\sounds\music\TheDemonsfromAdrian'sPen.MID
+ambience_sound resources\sounds\effects\heartbeatloop.wav
+
+[PLAYER]
+player 1.5 1.5 -1.0 0.0
+
+[WALL_TEXTURES]
+# Формат: ID путь_к_текстуре
+4 resources\textures\surfaces\braindead.png
+10 resources\textures\surfaces\decayingbrains.png
+12 resources\textures\surfaces\entrails.png
+13 resources\textures\surfaces\entrails2.png
+14 resources\textures\surfaces\entrailstart.png
+15 resources\textures\surfaces\flesh.png
+17 resources\textures\surfaces\intestines.png
+
+[FLOOR_TEXTURES]
+# Формат: ID путь_к_текстуре
+4 resources\textures\surfaces\braindead.png
+10 resources\textures\surfaces\decayingbrains.png
+12 resources\textures\surfaces\entrails.png
+13 resources\textures\surfaces\entrails2.png
+15 resources\textures\surfaces\flesh.png
+16 resources\textures\surfaces\holeinthebrain.png
+17 resources\textures\surfaces\intestines.png
+18 resources\textures\surfaces\mosaic.png
+
+[CEILING_TEXTURES]
+# Формат: ID путь_к_текстуре
+4 resources\textures\surfaces\braindead.png
+10 resources\textures\surfaces\decayingbrains.png
+12 resources\textures\surfaces\entrails.png
+13 resources\textures\surfaces\entrails2.png
+15 resources\textures\surfaces\flesh.png
+17 resources\textures\surfaces\intestines.png
+23 resources\textures\surfaces\trapdoor.png
+
+[FURNITURE_TYPES]
+# Загружаем типы мебели
+books resources\furniture\books.fur
+box resources\furniture\box.fur
+candle resources\furniture\candle.fur
+glowingskullonastick resources\furniture\glowingskullonastick.fur
+pileofremains resources\furniture\pileofremains.fur
+skullonastick resources\furniture\skullonastick.fur
+
+[FURNITURE_OBJECTS]
+# Добавляем объекты на уровень
+# Формат: type_name x y [rotation] [scale]
+pileofremains 12.1125 1.0625 0.0 1.0
+pileofremains 12.1125 1.7375 0.0 1.0
+pileofremains 12.8 1.75 0.0 1.0
+pileofremains 12.8375 1.0625 0.0 1.0
+pileofremains 12.1125 1.4 0.0 1.0
+pileofremains 12.4625 1.7875 0.0 1.0
+pileofremains 12.4125 1.0125 0.0 1.0
+skullonastick 3.8 3.6875 0.0 1.0
+skullonastick 3.1125 1.05 0.0 1.0
+skullonastick 5.7625 1.0875 0.0 1.0
+skullonastick 5.125 3.7375 0.0 1.0
+skullonastick 7.8 3.7375 0.0 1.0
+skullonastick 7.0875 1.05 0.0 1.0
+skullonastick 9.8 1.075 0.0 1.0
+candle 8.5 9.5 0.0 1.0
+candle 10.5 9.5 0.0 1.0
+candle 10.5 7.5 0.0 1.0
+candle 8.5 7.5 0.0 1.0
+glowingskullonastick 9.4625 8.85 0.0 1.0
+glowingskullonastick 9.9 8.45 0.0 1.0
+glowingskullonastick 9.4625 8.0 0.0 1.0
+glowingskullonastick 9.0125 8.4 0.0 1.0
+glowingskullonastick 2.5 8.5 0.0 1.0
+glowingskullonastick 2.5 10.5 0.0 1.0
+glowingskullonastick 9.5 14.5 0.0 1.0
+glowingskullonastick 13.5 14.5 0.0 1.0
+glowingskullonastick 12.5 12.5 0.0 1.0
+glowingskullonastick 13.5 11.5 0.0 1.0
+pileofremains 14.5 11.5 0.0 1.0
+pileofremains 14.5 12.5 0.0 1.0
+pileofremains 12.5 13.5 0.0 1.0
+pileofremains 14.5 13.5 0.0 1.0
+pileofremains 14.5 14.5 0.0 1.0
+pileofremains 12.5 14.5 0.0 1.0
+pileofremains 4.5 6.5 0.0 1.0
+pileofremains 4.075 6.8 0.0 1.0
+pileofremains 4.875 6.8 0.0 1.0
+pileofremains 4.075 6.0625 0.0 1.0
+pileofremains 4.825 6.0875 0.0 1.0
+pileofremains 5.5 14.5 0.0 1.0
+pileofremains 1.5 13.5 0.0 1.0
+books 10.4875 8.4125 0.0 1.0
+box 8.4 8.4625 0.0 1.0
+skullonastick 1.0461538461538462 3.6923076923076925 0.0 1.0
+glowingskullonastick 12.5 3.5 0 1.0
+
+[WALL_LAYER]
+0 17 0 17 17 17 0 17 17 17 0 0 4 4 4 0
+17 0 17 0 0 0 17 0 0 0 17 4 0 0 0 4
+17 0 17 0 17 0 17 0 17 0 17 4 4 4 0 4
+17 0 0 0 17 0 0 0 17 0 17 4 0 4 0 4
+0 17 17 17 0 17 17 17 17 0 17 4 0 0 0 4
+0 10 10 10 10 0 0 15 15 0 15 15 4 4 0 4
+10 0 0 0 0 10 15 0 0 0 0 0 15 4 0 4
+10 0 10 10 10 10 15 0 0 0 0 0 15 4 0 4
+10 0 0 10 0 0 0 0 0 0 0 0 0 0 0 4
+10 0 10 10 0 10 15 0 0 0 0 0 15 4 4 0
+10 0 0 10 0 10 15 0 0 0 0 0 15 14 12 12
+10 0 10 0 0 10 0 15 15 0 15 15 12 0 0 12
+10 0 0 0 10 12 12 12 12 0 12 12 0 13 0 12
+10 0 10 4 13 0 0 0 0 0 0 0 0 13 0 12
+10 0 0 0 0 0 0 0 0 0 0 0 0 0 0 12
+0 10 10 4 13 12 12 12 12 12 12 12 12 12 12 0
+
+[FLOOR_LAYER]
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+0 17 0 17 17 17 0 17 17 17 0 0 16 4 4 0
+0 17 0 17 0 17 0 17 0 17 0 0 0 0 4 0
+0 17 17 17 0 17 17 17 0 17 0 0 4 0 4 0
+0 0 0 0 0 0 0 0 0 17 0 0 4 4 4 0
+0 0 0 0 0 0 0 0 0 15 0 0 0 0 4 0
+0 10 10 10 10 0 0 15 15 15 15 15 0 0 4 0
+0 10 0 0 0 0 0 15 18 18 18 15 0 0 4 0
+0 10 10 0 10 10 15 15 18 18 18 15 15 4 4 0
+0 10 0 0 10 0 0 15 18 18 18 15 0 0 0 0
+0 10 10 0 10 0 0 15 15 15 15 15 0 0 0 0
+0 10 0 10 10 0 0 0 0 15 0 0 0 13 13 0
+0 10 10 10 0 0 0 0 0 12 0 0 13 0 13 0
+0 10 0 0 0 12 12 12 12 12 12 12 13 0 13 0
+0 10 10 4 13 12 12 12 12 12 12 12 13 13 13 0
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+
+[CEILING_LAYER]
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+0 17 0 17 17 17 0 17 17 17 0 0 4 4 4 0
+0 17 0 17 0 17 0 17 0 17 0 0 0 0 4 0
+0 17 17 17 0 17 17 17 0 17 0 0 4 0 4 0
+0 0 0 0 0 0 0 0 0 17 0 0 4 4 4 0
+0 0 0 0 0 0 0 0 0 15 0 0 0 0 4 0
+0 10 10 10 10 0 0 15 15 15 15 15 0 0 4 0
+0 10 0 0 0 0 0 15 15 15 15 15 0 0 4 0
+0 10 10 0 10 10 15 15 15 23 15 15 15 4 4 0
+0 10 0 0 10 0 0 15 15 15 15 15 0 0 0 0
+0 10 10 0 10 0 0 15 15 15 15 15 0 0 0 0
+0 10 0 10 10 0 0 0 0 15 0 0 0 13 13 0
+0 10 10 10 0 0 0 0 0 12 0 0 13 0 13 0
+0 10 0 0 0 12 12 12 12 12 12 12 13 0 13 0
+0 10 10 4 13 12 12 12 12 12 12 12 13 13 13 0
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
